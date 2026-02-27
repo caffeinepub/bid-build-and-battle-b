@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0.0",
+  "projectStateVersion": 3,
+  "summary": "Project involves a multi-role web app with Internet Identity authentication, admin login functionality, host approval flow, and player pages. The admin login is being rewritten to fix access issues.",
+  "architectural_notes": [
+    "Uses Internet Identity for authentication; admin access is controlled by principal ID whitelist in backend",
+    "Multi-role app: admin, host, and player roles with different page access"
+  ],
+  "known_issues": [
+    "Admin login not working — 'This account does not have admin privileges' error shown even for intended admin user"
+  ],
+  "isFixRequest": true,
+  "existing_features": [
+    {
+      "id": "feature-rewrite-the-adminlogin-page-so-that-the-this-account-does-not-have-admin-privileges-error-is-not-shown-before-the-user-has-attempted-to-log-in-the-error-should-only-appear-after-a-login-attempt-if-the-authenticated-principal-is-not-an-admin",
+      "title": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
+      "reqIds": [
+        "REQ-1"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-update-the-adminlogin-page-ui-flow-after-the-user-clicks-login-with-internet-identity-and-completes-authentication-verify-their-principal-against-the-backend-if-they-are-admin-redirect-to-the-admin-dashboard-if-not-admin-show-the-error-message-and-offer-a-logout-retry-option-add-a-clear-instruction-on-the-page-explaining-that-the-first-login-will-claim-admin-rights",
+      "title": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+      "reqIds": [
+        "REQ-3"
+      ],
+      "version": 1
+    }
+  ],
+  "new_feature_requests": [
+    {
+      "id": "AR-1",
+      "summary": "Rewrite admin login so the correct principal has admin access",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-3",
+      "summary": "Rewrite the admin access control in the backend so that the first user to log in via Internet Identity is automatically granted admin/owner status and stored in stable state, instead of relying on a hardcoded principal whitelist. If an admin already exists, only that stored principal retains admin access.",
+      "reqIds": [
+        "REQ-2"
+      ],
+      "status": "pending"
+    }
+  ],
+  "gameProjectType": "none",
+  "projectName": "Bid Build and Battle",
+  "clarification_mode": "instant",
+  "clarification_rounds": 0
+}

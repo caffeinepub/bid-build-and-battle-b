@@ -1,0 +1,79 @@
+{
+  "kind": "build_request",
+  "title": "Rewrite Admin Login with Dynamic Principal-Based Access",
+  "projectName": "Bid Build and Battle",
+  "priority": "high",
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "text": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-latest"
+        ],
+        "quotes": [
+          "This account does not have admin privileges. Please use an admin account.",
+          "The sign in option shows this even before entering the mail account."
+        ]
+      },
+      "acceptanceCriteria": [
+        "On initial page load, no error message is displayed",
+        "The error message only appears after a login attempt that fails the admin check",
+        "The 'Login with Internet Identity' button is visible and clickable on page load without any error state"
+      ]
+    },
+    {
+      "id": "REQ-2",
+      "text": "Rewrite the admin access control in the backend so that the first user to log in via Internet Identity is automatically granted admin/owner status and stored in stable state, instead of relying on a hardcoded principal whitelist. If an admin already exists, only that stored principal retains admin access.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-latest"
+        ],
+        "quotes": [
+          "Admin login is not working how to access it",
+          "yes can you rewrite the admin login"
+        ]
+      },
+      "acceptanceCriteria": [
+        "The backend stores admin principal(s) in stable state",
+        "The first caller of an 'initialize admin' or equivalent function is stored as the admin",
+        "Subsequent callers are denied admin access unless their principal matches the stored admin",
+        "The isAdmin or equivalent query returns true only for the stored admin principal"
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "text": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+      "target": "frontend",
+      "source": {
+        "messageIds": [
+          "msg-latest"
+        ],
+        "quotes": [
+          "yes can you rewrite the admin login"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Successful admin login redirects to /admin dashboard",
+        "Non-admin principals see the error only after login attempt",
+        "A logout/try different account option is shown alongside the error",
+        "Page includes a note explaining first-login admin claim behavior"
+      ]
+    }
+  ],
+  "constraints": [
+    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui",
+    "Admin principal storage must use stable variables in the Motoko backend to survive canister upgrades"
+  ],
+  "nonGoals": [
+    "Adding multiple admin accounts or role tiers beyond a single admin/owner",
+    "Changing the Team Login flow",
+    "Redesigning the overall app theme or other pages"
+  ],
+  "imageRequirements": {
+    "required": [],
+    "edits": []
+  }
+}

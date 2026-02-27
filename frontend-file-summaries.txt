@@ -1,0 +1,7 @@
+{
+  "frontend/src/pages/WatchPage.tsx": "Public read-only live auction viewer page showing the current player on auction, real-time bid display with BidHighlight animation, countdown timer, bid feed history, and CTAs to register or login — no authentication required.",
+  "frontend/src/pages/ResultsPage.tsx": "Auction results page displaying summary statistics (teams, players, highest base price), a tabbed view of all teams and the full player pool with role/category filters, and CSV/JSON export functionality.",
+  "frontend/src/pages/AdminLogin.tsx": "Rewritten admin login page using a phase-based state machine (`idle → logging-in → verifying → error`) where the admin check only fires after a successful login. Fixed the TypeScript error by replacing `loginStatus === 'error'` with the correctly-typed `isLoginError` boolean from the hook.",
+  "frontend/src/components/ProtectedRoute.tsx": "Route guard component that protects admin and team routes by checking authentication status and role/approval, using `isFetched` flags to avoid premature redirects, and showing a loading screen while checks are in progress.",
+  "frontend/src/hooks/useQueries.ts": "React Query hooks for all backend interactions including admin check (with fallback from isCallerAdmin to isAdmin), player/team/auction management, approvals, and user profile operations."
+}

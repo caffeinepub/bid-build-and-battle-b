@@ -1,0 +1,40 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Rewrite Admin Login with Dynamic Principal-Based Access",
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "summary": "Remove premature admin error display on AdminLogin page load",
+      "acceptanceCriteria": [
+        "On initial page load, no error message is displayed",
+        "The error message only appears after a login attempt that fails the admin check",
+        "The 'Login with Internet Identity' button is visible and clickable on page load without any error state"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/AdminLogin.tsx",
+          "operation": "modify",
+          "description": "Rewrite the AdminLogin component to remove the premature error state on page load. Replace the current isAdminQuery-based error display with local state that only shows the error after a login attempt fails the admin check. Remove the conditional error rendering that appears before authentication. Ensure the 'Login with Internet Identity' button is always visible on initial load without any error alert."
+        }
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "summary": "Update AdminLogin UI flow with post-login verification and first-login instruction",
+      "acceptanceCriteria": [
+        "Successful admin login redirects to /admin dashboard",
+        "Non-admin principals see the error only after login attempt",
+        "A logout/try different account option is shown alongside the error",
+        "Page includes a note explaining first-login admin claim behavior"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/AdminLogin.tsx",
+          "operation": "modify",
+          "description": "Add post-authentication admin verification flow: after Internet Identity login completes, fetch the user's admin status using isCallerAdmin(). If admin, redirect to /admin. If not admin, display the error message with a logout button allowing retry with a different account. Add an informational note above the login button explaining that the first user to log in will automatically be granted admin rights. Use local state to track login attempt and control error visibility."
+        }
+      ]
+    }
+  ]
+}
