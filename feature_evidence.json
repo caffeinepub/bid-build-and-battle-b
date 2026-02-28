@@ -2,29 +2,8 @@
   "kind": "feature_evidence_report",
   "features": [
     {
-      "featureId": "feature-rewrite-the-adminlogin-page-so-that-the-this-account-does-not-have-admin-privileges-error-is-not-shown-before-the-user-has-attempted-to-log-in-the-error-should-only-appear-after-a-login-attempt-if-the-authenticated-principal-is-not-an-admin",
-      "featureTitle": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
-      "files": [
-        "frontend/src/pages/AdminLogin.tsx"
-      ],
-      "components": [
-        "authorization@4.0.0",
-        "blob-storage@4.0.0",
-        "user-approval@3.0.0",
-        "core-infrastructure@1.0.2",
-        "shadcn-ui@1.0.0",
-        "build-template-react@1.0.0",
-        "initial-app@1.0.0",
-        "github-export-icp-cli@1.0.0"
-      ],
-      "testIds": [
-        "REQ-1"
-      ],
-      "confidence": "high"
-    },
-    {
-      "featureId": "feature-update-the-adminlogin-page-ui-flow-after-the-user-clicks-login-with-internet-identity-and-completes-authentication-verify-their-principal-against-the-backend-if-they-are-admin-redirect-to-the-admin-dashboard-if-not-admin-show-the-error-message-and-offer-a-logout-retry-option-add-a-clear-instruction-on-the-page-explaining-that-the-first-login-will-claim-admin-rights",
-      "featureTitle": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+      "featureId": "feature-on-the-admin-login-page-when-a-backend-canister-error-occurs-such-as-ic0508-or-replica-rejection-display-a-user-friendly-error-message-such-as-service-temporarily-unavailable-please-try-again-instead-of-the-raw-rejection-error-text",
+      "featureTitle": "On the Admin Login page, when a backend/canister error occurs (such as IC0508 or replica rejection), display a user-friendly error message such as 'Service temporarily unavailable. Please try again.' instead of the raw rejection error text.",
       "files": [
         "frontend/src/pages/AdminLogin.tsx"
       ],

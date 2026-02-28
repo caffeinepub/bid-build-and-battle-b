@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useQueryClient } from '@tanstack/react-query';
-import { useIsCallerAdmin } from '../hooks/useQueries';
+import { useIsAdmin } from '../hooks/useQueries';
 import { Menu, X, Trophy, Eye, BarChart3, LogOut, LogIn, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function AppHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { identity, clear } = useInternetIdentity();
-  const { data: isAdmin } = useIsCallerAdmin();
+  const { data: isAdmin } = useIsAdmin();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const router = useRouter();
@@ -19,6 +19,13 @@ export default function AppHeader() {
 
   const handleLogout = async () => {
     await clear();
+    queryClient.clear();
+    void navigate({ to: '/watch' });
+    setMobileOpen(false);
+  };
+
+  const handleAdminLogout = () => {
+    // For admin (passcode-based), just clear the query cache to reset admin state
     queryClient.clear();
     void navigate({ to: '/watch' });
     setMobileOpen(false);
@@ -75,7 +82,17 @@ export default function AppHeader() {
 
           {/* Auth Button */}
           <div className="hidden md:flex items-center gap-3">
-            {isAuthenticated ? (
+            {isAdmin ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleAdminLogout}
+                className="text-muted-foreground hover:text-foreground gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Admin Logout
+              </Button>
+            ) : isAuthenticated ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -139,7 +156,15 @@ export default function AppHeader() {
               </button>
             ))}
             <div className="pt-2 border-t border-border">
-              {isAuthenticated ? (
+              {isAdmin ? (
+                <button
+                  onClick={handleAdminLogout}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Admin Logout
+                </button>
+              ) : isAuthenticated ? (
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all"
@@ -154,7 +179,7 @@ export default function AppHeader() {
                       void navigate({ to: '/team/login' });
                       setMobileOpen(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all w-full text-left"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all"
                   >
                     <LogIn className="w-4 h-4" />
                     Team Login
@@ -164,10 +189,10 @@ export default function AppHeader() {
                       void navigate({ to: '/admin/login' });
                       setMobileOpen(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all w-full text-left"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all"
                   >
                     <Shield className="w-4 h-4" />
-                    Admin Login
+                    Admin
                   </button>
                 </>
               )}

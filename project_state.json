@@ -1,27 +1,19 @@
 {
   "schemaVersion": "1.0.0",
   "projectStateVersion": 3,
-  "summary": "Project involves a multi-role web app with Internet Identity authentication, admin login functionality, host approval flow, and player pages. The admin login is being rewritten to fix access issues.",
+  "summary": "Web app with admin login (passcode: sastra2026) and player management features, deployed on Internet Computer (IC) canisters.",
   "architectural_notes": [
-    "Uses Internet Identity for authentication; admin access is controlled by principal ID whitelist in backend",
-    "Multi-role app: admin, host, and player roles with different page access"
+    "Deployed on Internet Computer (IC) canisters; canister must be running for app to function",
+    "Admin passcode is sastra2026"
   ],
   "known_issues": [
-    "Admin login not working — 'This account does not have admin privileges' error shown even for intended admin user"
+    "IC canister stopping (IC0508 error) causes login/backend failures; requires canister restart or redeploy"
   ],
   "isFixRequest": true,
   "existing_features": [
     {
-      "id": "feature-rewrite-the-adminlogin-page-so-that-the-this-account-does-not-have-admin-privileges-error-is-not-shown-before-the-user-has-attempted-to-log-in-the-error-should-only-appear-after-a-login-attempt-if-the-authenticated-principal-is-not-an-admin",
-      "title": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
-      "reqIds": [
-        "REQ-1"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-update-the-adminlogin-page-ui-flow-after-the-user-clicks-login-with-internet-identity-and-completes-authentication-verify-their-principal-against-the-backend-if-they-are-admin-redirect-to-the-admin-dashboard-if-not-admin-show-the-error-message-and-offer-a-logout-retry-option-add-a-clear-instruction-on-the-page-explaining-that-the-first-login-will-claim-admin-rights",
-      "title": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+      "id": "feature-on-the-admin-login-page-when-a-backend-canister-error-occurs-such-as-ic0508-or-replica-rejection-display-a-user-friendly-error-message-such-as-service-temporarily-unavailable-please-try-again-instead-of-the-raw-rejection-error-text",
+      "title": "On the Admin Login page, when a backend/canister error occurs (such as IC0508 or replica rejection), display a user-friendly error message such as 'Service temporarily unavailable. Please try again.' instead of the raw rejection error text.",
       "reqIds": [
         "REQ-3"
       ],
@@ -31,13 +23,15 @@
   "new_feature_requests": [
     {
       "id": "AR-1",
-      "summary": "Rewrite admin login so the correct principal has admin access",
-      "reqIds": [],
+      "summary": "Update the admin passcode in the backend to 'sastra2026'. The hardcoded admin passcode used in the adminLogin function must be changed to 'sastra2026' so that login succeeds with that value.",
+      "reqIds": [
+        "REQ-1"
+      ],
       "status": "pending"
     },
     {
-      "id": "AR-3",
-      "summary": "Rewrite the admin access control in the backend so that the first user to log in via Internet Identity is automatically granted admin/owner status and stored in stable state, instead of relying on a hardcoded principal whitelist. If an admin already exists, only that stored principal retains admin access.",
+      "id": "AR-2",
+      "summary": "Ensure the backend actor initializes and starts correctly on deployment so it does not enter a stopped state (IC0508). The actor must be self-contained, have no blocking pre-upgrade hooks that prevent startup, and handle upgrade gracefully to avoid the canister being left in a stopped state.",
       "reqIds": [
         "REQ-2"
       ],
@@ -45,7 +39,7 @@
     }
   ],
   "gameProjectType": "none",
-  "projectName": "Bid Build and Battle",
+  "projectName": "B³ Auction Platform",
   "clarification_mode": "instant",
   "clarification_rounds": 0
 }

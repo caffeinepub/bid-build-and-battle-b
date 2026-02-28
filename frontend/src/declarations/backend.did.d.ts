@@ -98,6 +98,10 @@ export interface _SERVICE {
     ],
     bigint
   >,
+  /**
+   * / Admin login using a passcode
+   */
+  'adminLogin' : ActorMethod<[string], undefined>,
   'approveAllTeams' : ActorMethod<[], undefined>,
   'approveTeam' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,

@@ -1,14 +1,11 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the Admin Login flow so errors only appear after a login attempt, and replace the hardcoded admin principal whitelist with a dynamic first-login admin claim stored in stable backend state.
+**Goal:** Fix admin login by updating the passcode to `sastra2026`, resolving the canister stopped (IC0508) error, and improving error messaging on the Admin Login page.
 
 **Planned changes:**
-- Remove the "This account does not have admin privileges" error message from showing on initial page load; it should only appear after a failed login attempt
-- Add a note on the Admin Login page explaining that the first login will automatically claim admin rights
-- After login, verify the authenticated principal against the backend; redirect to the Admin Dashboard if admin, or show the error with a logout/retry option if not
-- Rewrite the backend admin access control to store the admin principal in a stable variable instead of a hardcoded whitelist
-- The first caller of the admin initialization function is stored as admin; subsequent callers are denied unless their principal matches the stored admin
-- The `isAdmin` query returns true only for the stored admin principal
+- Update the hardcoded admin passcode in the backend `adminLogin` function to `sastra2026`
+- Fix the backend actor initialization to prevent it from entering a stopped state (IC0508) after deployment
+- On the Admin Login page, catch canister/replica rejection errors and display a user-friendly message (e.g. "Service temporarily unavailable. Please try again.") instead of the raw error blob with internal canister IDs and request IDs
 
-**User-visible outcome:** On page load, the Admin Login shows no error. After clicking "Login with Internet Identity" and authenticating, admins are redirected to the dashboard. Non-admins see the error message with a logout/retry option. The first user to log in automatically becomes the admin.
+**User-visible outcome:** Admins can log in using the passcode `sastra2026` without encountering canister stopped errors, and any backend unavailability shows a clean, readable error message instead of raw rejection details.

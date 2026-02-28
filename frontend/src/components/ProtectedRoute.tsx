@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
-import { useIsCallerAdmin, useIsCallerApproved } from '../hooks/useQueries';
+import { useIsAdmin, useIsCallerApproved } from '../hooks/useQueries';
 import LoadingScreen from './LoadingScreen';
 
 interface ProtectedRouteProps {
@@ -11,8 +11,12 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requireApproval = false }: ProtectedRouteProps) {
   const { identity, isInitializing } = useInternetIdentity();
-  const { data: isAdmin, isLoading: adminLoading, isFetched: adminFetched } = useIsCallerAdmin();
-  const { data: isApproved, isLoading: approvalLoading, isFetched: approvalFetched } = useIsCallerApproved();
+  const { data: isAdmin, isLoading: adminLoading, isFetched: adminFetched } = useIsAdmin();
+  const {
+    data: isApproved,
+    isLoading: approvalLoading,
+    isFetched: approvalFetched,
+  } = useIsCallerApproved();
   const navigate = useNavigate();
   const hasRedirected = useRef(false);
 

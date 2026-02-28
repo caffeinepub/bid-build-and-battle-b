@@ -163,6 +163,10 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     addPlayer(name: string, role: PlayerRole, category: PlayerCategory, basePrice: bigint, stats: string | null, photo: ExternalBlob, isDeletable: boolean): Promise<bigint>;
+    /**
+     * / Admin login using a passcode
+     */
+    adminLogin(passcode: string): Promise<void>;
     approveAllTeams(): Promise<void>;
     approveTeam(name: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
@@ -305,6 +309,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.addPlayer(arg0, to_candid_PlayerRole_n8(this._uploadFile, this._downloadFile, arg1), to_candid_PlayerCategory_n10(this._uploadFile, this._downloadFile, arg2), arg3, to_candid_opt_n12(this._uploadFile, this._downloadFile, arg4), await to_candid_ExternalBlob_n13(this._uploadFile, this._downloadFile, arg5), arg6);
+            return result;
+        }
+    }
+    async adminLogin(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.adminLogin(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.adminLogin(arg0);
             return result;
         }
     }

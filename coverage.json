@@ -1,36 +1,32 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-27T17:54:45.732Z",
+  "generatedAt": "2026-02-28T06:59:03.864Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
     "total": 3,
-    "implemented": 2,
+    "implemented": 1,
     "items": [
       {
         "id": "REQ-1",
-        "summary": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
-        "status": "implemented",
-        "plannedFiles": [
-          "frontend/src/pages/AdminLogin.tsx"
-        ],
-        "matchedFiles": [
-          "frontend/src/pages/AdminLogin.tsx"
-        ]
+        "summary": "Update the admin passcode in the backend to 'sastra2026'. The hardcoded admin passcode used in the adminLogin function must be changed to 'sastra2026' so that login succeeds with that value.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
       },
       {
         "id": "REQ-2",
-        "summary": "Rewrite the admin access control in the backend so that the first user to log in via Internet Identity is automatically granted admin/owner status and stored in stable state, instead of relying on a hardcoded principal whitelist. If an admin already exists, only that stored principal retains admin access.",
+        "summary": "Ensure the backend actor initializes and starts correctly on deployment so it does not enter a stopped state (IC0508). The actor must be self-contained, have no blocking pre-upgrade hooks that prevent startup, and handle upgrade gracefully to avoid the canister being left in a stopped state.",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []
       },
       {
         "id": "REQ-3",
-        "summary": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+        "summary": "On the Admin Login page, when a backend/canister error occurs (such as IC0508 or replica rejection), display a user-friendly error message such as 'Service temporarily unavailable. Please try again.' instead of the raw rejection error text.",
         "status": "implemented",
         "plannedFiles": [
           "frontend/src/pages/AdminLogin.tsx"

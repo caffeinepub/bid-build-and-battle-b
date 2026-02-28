@@ -70,6 +70,10 @@ export enum UserRole {
 }
 export interface backendInterface {
     addPlayer(name: string, role: PlayerRole, category: PlayerCategory, basePrice: bigint, stats: string | null, photo: ExternalBlob, isDeletable: boolean): Promise<bigint>;
+    /**
+     * / Admin login using a passcode
+     */
+    adminLogin(passcode: string): Promise<void>;
     approveAllTeams(): Promise<void>;
     approveTeam(name: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;

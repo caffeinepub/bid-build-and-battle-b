@@ -1,789 +1,838 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useGetTeams,
   useGetPlayers,
-  useCurrentAuctionState,
-  useCurrentPlayer,
-  useCreateAuction,
-  useUpdateAuctionState,
-  useUpdateCurrentPlayer,
-  useApproveTeam,
-  useRejectTeam,
   useAddPlayer,
   useDeletePlayer,
+  useGetTeams,
+  useApproveTeam,
+  useRejectTeam,
+  useApproveAllTeams,
+  useRejectAllTeams,
+  useUpdateAuctionState,
+  useUpdateCurrentPlayer,
   useUpdatePlayerState,
-  AuctionStatus,
-  TeamStatus,
+  useCreateAuction,
+  useListApprovals,
+  useSetApproval,
+  useIsAdmin,
   PlayerRole,
   PlayerCategory,
+  AuctionStatus,
 } from '../hooks/useQueries';
 import { ExternalBlob } from '../backend';
-import {
-  LayoutDashboard, Users, Trophy, Play, Pause, CheckCircle,
-  XCircle, Plus, Trash2, Copy, LogOut, Menu, X,
-  Shield, AlertCircle, Upload, Settings, Eye,
-} from 'lucide-react';
+import { useActor } from '../hooks/useActor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import ConfirmModal from '../components/ConfirmModal';
-import PlayerCard from '../components/PlayerCard';
-import SkeletonLoader from '../components/SkeletonLoader';
-import AppHeader from '../components/AppHeader';
-import AppFooter from '../components/AppFooter';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  formatCurrency, formatTimestamp, getAuctionStatusLabel,
-  getTeamStatusColor, getRoleLabel, getCategoryLabel,
-} from '../lib/utils';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Plus,
+  Trash2,
+  Users,
+  Trophy,
+  Settings,
+  Play,
+  Pause,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  ChevronRight,
+  UserCheck,
+  Gavel,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-// ─── Auction Setup ────────────────────────────────────────────────────────────
-function AuctionSetupSection() {
-  const createAuction = useCreateAuction();
-  const [form, setForm] = useState({
-    name: '', dateTime: '', budget: '', increment: '',
-    minSquad: '', maxSquad: '', maxForeign: '4',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [createdAuctionId, setCreatedAuctionId] = useState<bigint | null>(null);
-  const [copied, setCopied] = useState(false);
+// ─── Add Player Form ──────────────────────────────────────────────────────────
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Auction name is required';
-    if (!form.dateTime) e.dateTime = 'Date and time is required';
-    else if (new Date(form.dateTime) <= new Date()) e.dateTime = 'Date must be in the future';
-    const budget = Number(form.budget);
-    if (!form.budget || isNaN(budget) || budget <= 0) e.budget = 'Budget is required';
-    else if (budget < 1_000_000) e.budget = 'Budget must be greater than ₹10,00,000';
-    const inc = Number(form.increment);
-    if (!form.increment || isNaN(inc) || inc <= 0) e.increment = 'Bid increment is required';
-    else if (inc < 100_000) e.increment = 'Bid increment must be at least ₹1,00,000';
-    const min = Number(form.minSquad);
-    const max = Number(form.maxSquad);
-    if (!form.minSquad || isNaN(min) || min < 11 || min > 25) e.minSquad = 'Min squad size must be 11–25';
-    if (!form.maxSquad || isNaN(max) || max < 11 || max > 25) e.maxSquad = 'Max squad size must be 11–25';
-    else if (max <= min) e.maxSquad = 'Max squad size must be greater than min';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+function AddPlayerForm() {
+  const { actor, isFetching: actorFetching } = useActor();
+  const addPlayer = useAddPlayer();
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<PlayerRole>(PlayerRole.batsman);
+  const [category, setCategory] = useState<PlayerCategory>(PlayerCategory.cappedIndian);
+  const [basePrice, setBasePrice] = useState('');
+  const [stats, setStats] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [formError, setFormError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validate()) setConfirmOpen(true);
-  };
+    setFormError('');
 
-  const handleConfirm = async () => {
+    if (!name.trim()) {
+      setFormError('Player name is required');
+      return;
+    }
+    if (!basePrice || isNaN(Number(basePrice)) || Number(basePrice) <= 0) {
+      setFormError('Valid base price is required');
+      return;
+    }
+    if (!actor) {
+      setFormError('Not connected to backend. Please refresh and try again.');
+      return;
+    }
+
+    let photo: ExternalBlob;
     try {
-      const dateMs = new Date(form.dateTime).getTime();
-      const dateNs = BigInt(dateMs) * 1_000_000n;
-      const id = await createAuction.mutateAsync({
-        name: form.name,
-        dateTime: dateNs,
-        budget: BigInt(Math.round(Number(form.budget))),
-        increment: BigInt(Math.round(Number(form.increment))),
-        minSquadSize: BigInt(Number(form.minSquad)),
-        maxSquadSize: BigInt(Number(form.maxSquad)),
+      if (photoFile) {
+        const bytes = new Uint8Array(await photoFile.arrayBuffer());
+        photo = ExternalBlob.fromBytes(bytes);
+      } else if (photoUrl.trim()) {
+        photo = ExternalBlob.fromURL(photoUrl.trim());
+      } else {
+        photo = ExternalBlob.fromURL('https://placehold.co/200x200/1a1a2e/cyan?text=Player');
+      }
+    } catch {
+      setFormError('Failed to process photo. Please try a different image.');
+      return;
+    }
+
+    try {
+      await addPlayer.mutateAsync({
+        name: name.trim(),
+        role,
+        category,
+        basePrice: BigInt(Math.round(Number(basePrice) * 100000)),
+        stats: stats.trim() || null,
+        photo,
+        isDeletable: true,
       });
-      setCreatedAuctionId(id);
-      setConfirmOpen(false);
-      toast.success('Auction created successfully!');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create auction';
-      toast.error(msg);
-      setConfirmOpen(false);
+      toast.success(`Player "${name.trim()}" added successfully!`);
+      // Reset form
+      setName('');
+      setBasePrice('');
+      setStats('');
+      setPhotoUrl('');
+      setPhotoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      setFormError(msg);
+      toast.error(`Error: ${msg}`);
     }
   };
 
-  const registrationLink = createdAuctionId !== null
-    ? `${window.location.origin}/team/register?auction=${createdAuctionId}`
-    : null;
-
-  const handleCopy = () => {
-    if (registrationLink) {
-      navigator.clipboard.writeText(registrationLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success('Link copied!');
-    }
-  };
-
-  const fieldEl = (
-    id: string, label: string, type: string, placeholder: string,
-    value: string, onChange: (v: string) => void, hint?: string
-  ) => (
-    <div>
-      <Label htmlFor={id} className="text-sm font-medium text-foreground">
-        {label} <span className="text-pink">*</span>
-      </Label>
-      {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
-      <Input
-        id={id} type={type} value={value}
-        onChange={(e) => { onChange(e.target.value); if (errors[id]) setErrors((p) => ({ ...p, [id]: '' })); }}
-        placeholder={placeholder}
-        className="mt-1 bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan"
-      />
-      {errors[id] && (
-        <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" /> {errors[id]}
-        </p>
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {formError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
       )}
-    </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="playerName">Player Name *</Label>
+          <Input
+            id="playerName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Virat Kohli"
+            disabled={addPlayer.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="basePrice">Base Price (Lakhs) *</Label>
+          <Input
+            id="basePrice"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={basePrice}
+            onChange={(e) => setBasePrice(e.target.value)}
+            placeholder="e.g. 20"
+            disabled={addPlayer.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Role *</Label>
+          <Select
+            value={role}
+            onValueChange={(v) => setRole(v as PlayerRole)}
+            disabled={addPlayer.isPending}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PlayerRole.batsman}>Batsman</SelectItem>
+              <SelectItem value={PlayerRole.bowler}>Bowler</SelectItem>
+              <SelectItem value={PlayerRole.allRounder}>All Rounder</SelectItem>
+              <SelectItem value={PlayerRole.wicketKeeper}>Wicket Keeper</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Category *</Label>
+          <Select
+            value={category}
+            onValueChange={(v) => setCategory(v as PlayerCategory)}
+            disabled={addPlayer.isPending}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PlayerCategory.cappedIndian}>Capped Indian</SelectItem>
+              <SelectItem value={PlayerCategory.uncappedIndian}>Uncapped Indian</SelectItem>
+              <SelectItem value={PlayerCategory.foreign}>Foreign</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="stats">Stats (optional)</Label>
+          <Input
+            id="stats"
+            value={stats}
+            onChange={(e) => setStats(e.target.value)}
+            placeholder="e.g. Avg 45, SR 130"
+            disabled={addPlayer.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="photoUrl">Photo URL (optional)</Label>
+          <Input
+            id="photoUrl"
+            value={photoUrl}
+            onChange={(e) => setPhotoUrl(e.target.value)}
+            placeholder="https://..."
+            disabled={addPlayer.isPending}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="photoFile">Or Upload Photo (optional)</Label>
+        <Input
+          id="photoFile"
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+          disabled={addPlayer.isPending}
+        />
+      </div>
+
+      <Button
+        type="submit"
+        disabled={addPlayer.isPending || actorFetching}
+        className="w-full sm:w-auto"
+      >
+        {addPlayer.isPending ? (
+          <span className="flex items-center gap-2">
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            Adding Player...
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Player
+          </span>
+        )}
+      </Button>
+    </form>
   );
+}
+
+// ─── Players Tab ──────────────────────────────────────────────────────────────
+
+function PlayersTab() {
+  const { data: players, isLoading } = useGetPlayers();
+  const deletePlayer = useDeletePlayer();
+  const updatePlayerState = useUpdatePlayerState();
+  const updateCurrentPlayer = useUpdateCurrentPlayer();
+
+  const formatPrice = (price: bigint) => {
+    const lakhs = Number(price) / 100000;
+    return `₹${lakhs.toFixed(2)}L`;
+  };
+
+  const getRoleBadgeColor = (role: PlayerRole) => {
+    switch (role) {
+      case PlayerRole.batsman: return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case PlayerRole.bowler: return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case PlayerRole.allRounder: return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case PlayerRole.wicketKeeper: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+    }
+  };
+
+  const getCategoryBadgeColor = (cat: PlayerCategory) => {
+    switch (cat) {
+      case PlayerCategory.cappedIndian: return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case PlayerCategory.uncappedIndian: return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+      case PlayerCategory.foreign: return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">Create New Auction</h3>
-        <p className="text-sm text-muted-foreground">Set up a new IPL auction with all required parameters.</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Plus className="w-4 h-4 text-primary" />
+            Add New Player
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AddPlayerForm />
+        </CardContent>
+      </Card>
 
-      {registrationLink && (
-        <div className="p-4 rounded-xl bg-cyan/10 border border-cyan/20">
-          <p className="text-sm font-semibold text-cyan mb-2">✅ Auction Created! Share this registration link:</p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs bg-background rounded-lg px-3 py-2 text-foreground truncate border border-border">
-              {registrationLink}
-            </code>
-            <Button size="sm" onClick={handleCopy} className="bg-cyan text-navy-deep hover:bg-cyan/90 flex-shrink-0">
-              <Copy className="w-4 h-4 mr-1" />
-              {copied ? 'Copied!' : 'Copy'}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2">
-          {fieldEl('name', 'Auction Name', 'text', 'e.g., IPL Mega Auction 2025', form.name, (v) => setForm((p) => ({ ...p, name: v })))}
-        </div>
-        {fieldEl('dateTime', 'Auction Date & Time', 'datetime-local', '', form.dateTime, (v) => setForm((p) => ({ ...p, dateTime: v })))}
-        {fieldEl('budget', 'Team Budget (₹)', 'number', '10000000', form.budget, (v) => setForm((p) => ({ ...p, budget: v })), 'Min ₹10,00,000')}
-        {fieldEl('increment', 'Bid Increment (₹)', 'number', '100000', form.increment, (v) => setForm((p) => ({ ...p, increment: v })), 'Min ₹1,00,000')}
-        {fieldEl('minSquad', 'Min Squad Size', 'number', '11', form.minSquad, (v) => setForm((p) => ({ ...p, minSquad: v })), '11–25 players')}
-        {fieldEl('maxSquad', 'Max Squad Size', 'number', '25', form.maxSquad, (v) => setForm((p) => ({ ...p, maxSquad: v })), 'Must be > min')}
-        {fieldEl('maxForeign', 'Max Foreign Players', 'number', '4', form.maxForeign, (v) => setForm((p) => ({ ...p, maxForeign: v })))}
-        <div className="sm:col-span-2">
-          <Button type="submit" className="w-full h-11 gradient-cyan-pink text-white font-semibold rounded-xl hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" /> Create Auction
-          </Button>
-        </div>
-      </form>
-
-      <ConfirmModal
-        open={confirmOpen}
-        title="Create Auction"
-        message={`Create auction "${form.name}" with a team budget of ${formatCurrency(Number(form.budget) || 0)}?`}
-        confirmLabel="Create Auction"
-        variant="success"
-        onConfirm={handleConfirm}
-        onCancel={() => setConfirmOpen(false)}
-        isLoading={createAuction.isPending}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="w-4 h-4 text-primary" />
+            Player List ({players?.length ?? 0})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : !players || players.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              No players added yet. Use the form above to add players.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {players.map(([id, player]) => (
+                <div
+                  key={id.toString()}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/50 hover:bg-card transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0">
+                      <img
+                        src={player.photo.getDirectURL()}
+                        alt={player.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://placehold.co/40x40/1a1a2e/cyan?text=P';
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{player.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className={`text-xs px-1.5 py-0.5 rounded border ${getRoleBadgeColor(player.role)}`}>
+                          {player.role}
+                        </span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded border ${getCategoryBadgeColor(player.category)}`}>
+                          {player.category}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{formatPrice(player.basePrice)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await updateCurrentPlayer.mutateAsync(id);
+                          toast.success(`${player.name} set as current auction player`);
+                        } catch (err: any) {
+                          toast.error(err?.message ?? 'Failed to set current player');
+                        }
+                      }}
+                      disabled={updateCurrentPlayer.isPending}
+                      title="Set as current auction player"
+                    >
+                      <Gavel className="w-3.5 h-3.5" />
+                    </Button>
+                    {player.isDeletable && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive" disabled={deletePlayer.isPending}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Player</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete <strong>{player.name}</strong>? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={async () => {
+                                try {
+                                  await deletePlayer.mutateAsync(id);
+                                  toast.success(`${player.name} deleted`);
+                                } catch (err: any) {
+                                  toast.error(err?.message ?? 'Failed to delete player');
+                                }
+                              }}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// ─── Team Management ──────────────────────────────────────────────────────────
-function TeamManagementSection() {
+// ─── Teams Tab ────────────────────────────────────────────────────────────────
+
+function TeamsTab() {
   const { data: teams, isLoading } = useGetTeams();
   const approveTeam = useApproveTeam();
   const rejectTeam = useRejectTeam();
-  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; name: string } | null>(null);
+  const approveAll = useApproveAllTeams();
+  const rejectAll = useRejectAllTeams();
 
-  const handleAction = async () => {
-    if (!confirmAction) return;
-    try {
-      if (confirmAction.type === 'approve') {
-        await approveTeam.mutateAsync(confirmAction.name);
-        toast.success(`Team "${confirmAction.name}" approved!`);
-      } else {
-        await rejectTeam.mutateAsync(confirmAction.name);
-        toast.success(`Team "${confirmAction.name}" rejected.`);
-      }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Action failed');
-    } finally {
-      setConfirmAction(null);
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved': return <Badge className="bg-green-500/20 text-green-400 border-green-500/30 border">Approved</Badge>;
+      case 'rejected': return <Badge className="bg-red-500/20 text-red-400 border-red-500/30 border">Rejected</Badge>;
+      default: return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border">Pending</Badge>;
     }
   };
-
-  if (isLoading) return <SkeletonLoader variant="table-row" count={4} />;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">Team Management</h3>
-        <p className="text-sm text-muted-foreground">Approve or reject registered teams.</p>
-      </div>
-
-      {!teams || teams.length === 0 ? (
-        <div className="text-center py-12 card-navy rounded-xl">
-          <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-          <p className="text-muted-foreground">No teams registered yet.</p>
-          <p className="text-xs text-muted-foreground mt-1">Share the registration link to invite teams.</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[640px]">
-            <thead>
-              <tr className="border-b border-border bg-secondary/50">
-                {['Team', 'Owner', 'Email', 'Registered', 'Status', 'Actions'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {teams.map((team) => (
-                <tr key={team.name} className="hover:bg-secondary/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground text-sm">{team.name}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{team.owner}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{team.email}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{formatTimestamp(team.registeredTime)}</td>
-                  <td className="px-4 py-3">
-                    <Badge className={`text-xs border-0 ${getTeamStatusColor(team.status)}`}>{team.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      {team.status !== TeamStatus.approved && (
-                        <Button size="sm" onClick={() => setConfirmAction({ type: 'approve', name: team.name })}
-                          className="h-7 px-2 bg-chart-3/20 text-chart-3 hover:bg-chart-3/30 border-0 text-xs">
-                          <CheckCircle className="w-3 h-3 mr-1" /> Approve
-                        </Button>
-                      )}
-                      {team.status !== TeamStatus.rejected && (
-                        <Button size="sm" onClick={() => setConfirmAction({ type: 'reject', name: team.name })}
-                          className="h-7 px-2 bg-destructive/20 text-destructive hover:bg-destructive/30 border-0 text-xs">
-                          <XCircle className="w-3 h-3 mr-1" /> Reject
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <ConfirmModal
-        open={!!confirmAction}
-        title={confirmAction?.type === 'approve' ? 'Approve Team' : 'Reject Team'}
-        message={`Are you sure you want to ${confirmAction?.type} team "${confirmAction?.name}"?`}
-        confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
-        variant={confirmAction?.type === 'approve' ? 'success' : 'destructive'}
-        onConfirm={handleAction}
-        onCancel={() => setConfirmAction(null)}
-        isLoading={approveTeam.isPending || rejectTeam.isPending}
-      />
-    </div>
-  );
-}
-
-// ─── Player Management ────────────────────────────────────────────────────────
-function PlayerManagementSection() {
-  const { data: players, isLoading } = useGetPlayers();
-  const { data: auctionState } = useCurrentAuctionState();
-  const addPlayer = useAddPlayer();
-  const deletePlayer = useDeletePlayer();
-
-  const [form, setForm] = useState({
-    name: '', role: PlayerRole.batsman as PlayerRole,
-    category: PlayerCategory.cappedIndian as PlayerCategory,
-    basePrice: '', stats: '',
-  });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [confirmAdd, setConfirmAdd] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<bigint | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
-  const isLive = auctionState === AuctionStatus.live;
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
-      if (errors.photo) setErrors((p) => ({ ...p, photo: '' }));
-    }
-  };
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Player name is required';
-    if (!photoFile) e.photo = 'Player photo is required';
-    const price = Number(form.basePrice);
-    if (!form.basePrice || isNaN(price) || price <= 0) e.basePrice = 'Base price is required';
-    else if (price < 20_000) e.basePrice = 'Base price must be at least ₹20,000';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validate()) setConfirmAdd(true);
-  };
-
-  const handleConfirmAdd = async () => {
-    if (!photoFile) return;
-    try {
-      const arrayBuffer = await photoFile.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      const blob = ExternalBlob.fromBytes(bytes).withUploadProgress((pct) => setUploadProgress(pct));
-      await addPlayer.mutateAsync({
-        name: form.name.trim(), role: form.role, category: form.category,
-        basePrice: BigInt(Math.round(Number(form.basePrice))),
-        stats: form.stats.trim() || null, photo: blob, isDeletable: true,
-      });
-      setForm({ name: '', role: PlayerRole.batsman, category: PlayerCategory.cappedIndian, basePrice: '', stats: '' });
-      setPhotoFile(null);
-      setPhotoPreview(null);
-      setUploadProgress(0);
-      setConfirmAdd(false);
-      toast.success('Player added successfully!');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add player');
-      setConfirmAdd(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (deleteTarget === null) return;
-    try {
-      await deletePlayer.mutateAsync(deleteTarget);
-      toast.success('Player deleted.');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete player');
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">Player Management</h3>
-        <p className="text-sm text-muted-foreground">Add players to the auction pool.</p>
-      </div>
-
-      <div className="card-navy rounded-xl p-5 border border-border">
-        <h4 className="text-sm font-semibold text-foreground mb-4">Add New Player</h4>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <Label className="text-sm font-medium text-foreground">Player Name <span className="text-pink">*</span></Label>
-              <Input value={form.name}
-                onChange={(e) => { setForm((p) => ({ ...p, name: e.target.value })); if (errors.name) setErrors((p) => ({ ...p, name: '' })); }}
-                placeholder="e.g., Virat Kohli"
-                className="mt-1 bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan" />
-              {errors.name && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.name}</p>}
-            </div>
-
-            <div className="sm:col-span-2">
-              <Label className="text-sm font-medium text-foreground">Player Photo <span className="text-pink">*</span></Label>
-              <div className="mt-1 flex items-center gap-4">
-                <label className="flex-1 cursor-pointer">
-                  <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${errors.photo ? 'border-destructive' : 'border-border hover:border-cyan/50'}`}>
-                    <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                    <p className="text-xs text-muted-foreground">{photoFile ? photoFile.name : 'Click to upload photo'}</p>
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                      <div className="mt-2 bg-secondary rounded-full h-1.5">
-                        <div className="bg-cyan h-1.5 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
-                      </div>
-                    )}
-                  </div>
-                  <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                </label>
-                {photoPreview && (
-                  <img src={photoPreview} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-border flex-shrink-0" />
-                )}
-              </div>
-              {errors.photo && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.photo}</p>}
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-foreground">Role</Label>
-              <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v as PlayerRole }))}>
-                <SelectTrigger className="mt-1 bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  <SelectItem value={PlayerRole.batsman}>Batsman</SelectItem>
-                  <SelectItem value={PlayerRole.bowler}>Bowler</SelectItem>
-                  <SelectItem value={PlayerRole.allRounder}>All-Rounder</SelectItem>
-                  <SelectItem value={PlayerRole.wicketKeeper}>Wicket-Keeper</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-foreground">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v as PlayerCategory }))}>
-                <SelectTrigger className="mt-1 bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  <SelectItem value={PlayerCategory.cappedIndian}>Capped Indian</SelectItem>
-                  <SelectItem value={PlayerCategory.uncappedIndian}>Uncapped Indian</SelectItem>
-                  <SelectItem value={PlayerCategory.foreign}>Overseas/Foreign</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-foreground">Base Price (₹) <span className="text-pink">*</span></Label>
-              <Input type="number" value={form.basePrice}
-                onChange={(e) => { setForm((p) => ({ ...p, basePrice: e.target.value })); if (errors.basePrice) setErrors((p) => ({ ...p, basePrice: '' })); }}
-                placeholder="20000"
-                className="mt-1 bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan" />
-              {errors.basePrice && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.basePrice}</p>}
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-foreground">Player Stats (optional)</Label>
-              <Input value={form.stats}
-                onChange={(e) => setForm((p) => ({ ...p, stats: e.target.value }))}
-                placeholder="e.g., Avg: 45.2, SR: 138"
-                className="mt-1 bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-cyan" />
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full h-10 gradient-cyan-pink text-white font-semibold rounded-xl hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" /> Add Player
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">
+          {teams?.length ?? 0} registered teams
+        </h3>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await approveAll.mutateAsync();
+                toast.success('All teams approved');
+              } catch (err: any) {
+                toast.error(err?.message ?? 'Failed');
+              }
+            }}
+            disabled={approveAll.isPending}
+          >
+            <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+            Approve All
           </Button>
-        </form>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={async () => {
+              try {
+                await rejectAll.mutateAsync();
+                toast.success('All teams rejected');
+              } catch (err: any) {
+                toast.error(err?.message ?? 'Failed');
+              }
+            }}
+            disabled={rejectAll.isPending}
+          >
+            <XCircle className="w-3.5 h-3.5 mr-1.5" />
+            Reject All
+          </Button>
+        </div>
       </div>
 
-      <div>
-        <h4 className="text-sm font-semibold text-foreground mb-3">Player Pool ({players?.length ?? 0} players)</h4>
-        {isLoading ? (
-          <SkeletonLoader variant="player-card" count={4} />
-        ) : !players || players.length === 0 ? (
-          <div className="text-center py-12 card-navy rounded-xl">
-            <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No players added yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {players.map(([id, player]) => (
-              <div key={id.toString()} className="relative group">
-                <PlayerCard player={player} size="sm" />
-                {!isLive && player.isDeletable && (
-                  <button onClick={() => setDeleteTarget(id)}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-destructive/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-destructive">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {isLive && (
-                  <div className="absolute top-2 right-2">
-                    <Badge className="text-xs bg-chart-3/20 text-chart-3 border-0">Live</Badge>
-                  </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </div>
+      ) : !teams || teams.length === 0 ? (
+        <p className="text-muted-foreground text-sm text-center py-8">No teams registered yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {teams.map((team) => (
+            <div
+              key={team.name}
+              className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/50"
+            >
+              <div>
+                <p className="font-medium text-sm">{team.name}</p>
+                <p className="text-xs text-muted-foreground">{team.owner} · {team.email}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {getStatusBadge(team.status)}
+                {team.status === 'pending' && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-400 border-green-500/30 hover:bg-green-500/10"
+                      onClick={async () => {
+                        try {
+                          await approveTeam.mutateAsync(team.name);
+                          toast.success(`${team.name} approved`);
+                        } catch (err: any) {
+                          toast.error(err?.message ?? 'Failed');
+                        }
+                      }}
+                      disabled={approveTeam.isPending}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        try {
+                          await rejectTeam.mutateAsync(team.name);
+                          toast.success(`${team.name} rejected`);
+                        } catch (err: any) {
+                          toast.error(err?.message ?? 'Failed');
+                        }
+                      }}
+                      disabled={rejectTeam.isPending}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </Button>
+                  </>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <ConfirmModal open={confirmAdd} title="Add Player"
-        message={`Add "${form.name}" with base price ${formatCurrency(Number(form.basePrice) || 0)} to the auction pool?`}
-        confirmLabel="Add Player" variant="success"
-        onConfirm={handleConfirmAdd} onCancel={() => setConfirmAdd(false)} isLoading={addPlayer.isPending} />
-      <ConfirmModal open={deleteTarget !== null} title="Delete Player"
-        message="Are you sure you want to delete this player? This cannot be undone."
-        confirmLabel="Delete" variant="destructive"
-        onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} isLoading={deletePlayer.isPending} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Auction Control ──────────────────────────────────────────────────────────
-function AuctionControlSection() {
-  const { data: auctionState } = useCurrentAuctionState();
-  const { data: currentPlayer } = useCurrentPlayer();
-  const { data: players } = useGetPlayers();
-  const { data: teams } = useGetTeams();
-  const updateState = useUpdateAuctionState();
-  const updateCurrentPlayer = useUpdateCurrentPlayer();
-  const updatePlayerState = useUpdatePlayerState();
+// ─── Auction Tab ──────────────────────────────────────────────────────────────
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
-  const [confirmAction, setConfirmAction] = useState<{
-    type: 'start' | 'pause' | 'resume' | 'complete';
-    label: string;
-    message: string;
-  } | null>(null);
+function AuctionTab() {
+  const updateAuctionState = useUpdateAuctionState();
+  const { data: currentState } = useGetPlayers(); // just to show something
+  const createAuction = useCreateAuction();
 
-  const isLive = auctionState === AuctionStatus.live;
-  const isPaused = auctionState === AuctionStatus.paused;
-  const isNotStarted = !auctionState || auctionState === AuctionStatus.notStarted;
-  const isCompleted = auctionState === AuctionStatus.completed;
+  const [auctionName, setAuctionName] = useState('');
+  const [budget, setBudget] = useState('');
+  const [increment, setIncrement] = useState('');
+  const [minSquad, setMinSquad] = useState('');
+  const [maxSquad, setMaxSquad] = useState('');
+  const [auctionError, setAuctionError] = useState('');
 
-  const handleAction = async () => {
-    if (!confirmAction) return;
+  const handleCreateAuction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuctionError('');
     try {
-      switch (confirmAction.type) {
-        case 'start':
-          await updateState.mutateAsync(AuctionStatus.live);
-          if (players) {
-            for (const [id, p] of players) {
-              if (p.isDeletable) await updatePlayerState.mutateAsync({ playerId: id, isDeletable: false });
-            }
-          }
-          toast.success('Auction started!');
-          break;
-        case 'pause':
-          await updateState.mutateAsync(AuctionStatus.paused);
-          toast.success('Auction paused.');
-          break;
-        case 'resume':
-          await updateState.mutateAsync(AuctionStatus.live);
-          toast.success('Auction resumed!');
-          break;
-        case 'complete':
-          await updateState.mutateAsync(AuctionStatus.completed);
-          toast.success('Auction completed!');
-          break;
-      }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Action failed');
-    } finally {
-      setConfirmAction(null);
+      await createAuction.mutateAsync({
+        name: auctionName,
+        dateTime: BigInt(Date.now()),
+        budget: BigInt(Math.round(Number(budget) * 100000)),
+        increment: BigInt(Math.round(Number(increment) * 100000)),
+        minSquadSize: BigInt(Number(minSquad)),
+        maxSquadSize: BigInt(Number(maxSquad)),
+      });
+      toast.success('Auction created!');
+      setAuctionName('');
+      setBudget('');
+      setIncrement('');
+      setMinSquad('');
+      setMaxSquad('');
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      setAuctionError(msg);
+      toast.error(msg);
     }
   };
-
-  const handleSetCurrentPlayer = async () => {
-    if (!selectedPlayerId) return;
-    try {
-      await updateCurrentPlayer.mutateAsync(BigInt(selectedPlayerId));
-      toast.success('Current player updated!');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update player');
-    }
-  };
-
-  const statusColor = isLive ? 'bg-chart-3/10 border-chart-3/20' :
-    isPaused ? 'bg-chart-4/10 border-chart-4/20' :
-    isCompleted ? 'bg-cyan/10 border-cyan/20' : 'bg-secondary border-border';
-
-  const dotColor = isLive ? 'bg-chart-3 animate-pulse' :
-    isPaused ? 'bg-chart-4' : isCompleted ? 'bg-cyan' : 'bg-muted-foreground';
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">Auction Control Panel</h3>
-        <p className="text-sm text-muted-foreground">Manage the live auction state and current player.</p>
-      </div>
-
-      {/* Status Banner */}
-      <div className={`flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border ${statusColor}`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${dotColor}`} />
-          <span className="font-semibold text-foreground">
-            Status: {isLive ? 'Live' : isPaused ? 'Paused' : isCompleted ? 'Completed' : 'Not Started'}
-          </span>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {isNotStarted && (
-            <Button size="sm" onClick={() => setConfirmAction({ type: 'start', label: 'Start Auction', message: 'Start the auction? Players will be locked and cannot be deleted.' })}
-              className="bg-chart-3/20 text-chart-3 hover:bg-chart-3/30 border-0">
-              <Play className="w-4 h-4 mr-1" /> Start
-            </Button>
-          )}
-          {isLive && (
-            <>
-              <Button size="sm" onClick={() => setConfirmAction({ type: 'pause', label: 'Pause Auction', message: 'Pause the auction?' })}
-                className="bg-chart-4/20 text-chart-4 hover:bg-chart-4/30 border-0">
-                <Pause className="w-4 h-4 mr-1" /> Pause
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Gavel className="w-4 h-4 text-primary" />
+            Auction Controls
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Start', state: AuctionStatus.live, icon: Play, color: 'text-green-400' },
+              { label: 'Pause', state: AuctionStatus.paused, icon: Pause, color: 'text-yellow-400' },
+              { label: 'Complete', state: AuctionStatus.completed, icon: CheckCircle, color: 'text-blue-400' },
+              { label: 'Reset', state: AuctionStatus.notStarted, icon: Settings, color: 'text-muted-foreground' },
+            ].map(({ label, state, icon: Icon, color }) => (
+              <Button
+                key={label}
+                variant="outline"
+                className={`flex flex-col h-16 gap-1 ${color}`}
+                onClick={async () => {
+                  try {
+                    await updateAuctionState.mutateAsync(state);
+                    toast.success(`Auction ${label.toLowerCase()}ed`);
+                  } catch (err: any) {
+                    toast.error(err?.message ?? 'Failed');
+                  }
+                }}
+                disabled={updateAuctionState.isPending}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-xs">{label}</span>
               </Button>
-              <Button size="sm" onClick={() => setConfirmAction({ type: 'complete', label: 'End Auction', message: 'End the auction? This cannot be undone.' })}
-                className="bg-destructive/20 text-destructive hover:bg-destructive/30 border-0">
-                End Auction
-              </Button>
-            </>
-          )}
-          {isPaused && (
-            <Button size="sm" onClick={() => setConfirmAction({ type: 'resume', label: 'Resume Auction', message: 'Resume the auction?' })}
-              className="bg-chart-3/20 text-chart-3 hover:bg-chart-3/30 border-0">
-              <Play className="w-4 h-4 mr-1" /> Resume
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Current Player */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card-navy rounded-xl p-5 border border-border">
-          <h4 className="text-sm font-semibold text-foreground mb-4">Set Current Player</h4>
-          <div className="flex gap-2">
-            <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
-              <SelectTrigger className="flex-1 bg-input border-border text-foreground">
-                <SelectValue placeholder="Select a player..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border">
-                {players?.map(([id, p]) => (
-                  <SelectItem key={id.toString()} value={id.toString()}>
-                    {p.name} — {formatCurrency(p.basePrice)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleSetCurrentPlayer} disabled={!selectedPlayerId || updateCurrentPlayer.isPending}
-              className="bg-cyan text-navy-deep hover:bg-cyan/90">
-              Set
-            </Button>
-          </div>
-        </div>
-
-        {currentPlayer && (
-          <div className="card-navy rounded-xl p-5 border border-cyan/20">
-            <h4 className="text-sm font-semibold text-cyan mb-3">Current Player on Auction</h4>
-            <PlayerCard player={currentPlayer} size="sm" />
-          </div>
-        )}
-      </div>
-
-      {/* Teams Overview */}
-      {teams && teams.length > 0 && (
-        <div className="card-navy rounded-xl p-5 border border-border">
-          <h4 className="text-sm font-semibold text-foreground mb-4">Teams Overview</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {teams.filter(t => t.status === TeamStatus.approved).map((team) => (
-              <div key={team.name} className="bg-secondary rounded-lg p-3">
-                <p className="font-medium text-foreground text-sm">{team.name}</p>
-                <p className="text-xs text-muted-foreground">{team.owner}</p>
-                <Badge className="mt-1 text-xs bg-chart-3/20 text-chart-3 border-0">Approved</Badge>
-              </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-primary" />
+            Create Auction
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreateAuction} className="space-y-4">
+            {auctionError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{auctionError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Auction Name</Label>
+                <Input value={auctionName} onChange={(e) => setAuctionName(e.target.value)} placeholder="IPL 2026" />
+              </div>
+              <div className="space-y-2">
+                <Label>Budget per Team (Lakhs)</Label>
+                <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="9000" />
+              </div>
+              <div className="space-y-2">
+                <Label>Bid Increment (Lakhs)</Label>
+                <Input type="number" value={increment} onChange={(e) => setIncrement(e.target.value)} placeholder="25" />
+              </div>
+              <div className="space-y-2">
+                <Label>Min Squad Size</Label>
+                <Input type="number" value={minSquad} onChange={(e) => setMinSquad(e.target.value)} placeholder="18" />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Squad Size</Label>
+                <Input type="number" value={maxSquad} onChange={(e) => setMaxSquad(e.target.value)} placeholder="25" />
+              </div>
+            </div>
+            <Button type="submit" disabled={createAuction.isPending}>
+              {createAuction.isPending ? 'Creating...' : 'Create Auction'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Approvals Tab ────────────────────────────────────────────────────────────
+
+function ApprovalsTab() {
+  const { data: approvals, isLoading } = useListApprovals();
+  const setApproval = useSetApproval();
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Manage user approval requests for team access.
+      </p>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+        </div>
+      ) : !approvals || approvals.length === 0 ? (
+        <p className="text-muted-foreground text-sm text-center py-8">No approval requests.</p>
+      ) : (
+        <div className="space-y-3">
+          {approvals.map((approval) => (
+            <div
+              key={approval.principal.toString()}
+              className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/50"
+            >
+              <div>
+                <p className="font-mono text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-xs">
+                  {approval.principal.toString()}
+                </p>
+                <p className="text-xs mt-0.5 capitalize">{approval.status}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-400 border-green-500/30 hover:bg-green-500/10"
+                  onClick={async () => {
+                    try {
+                      await setApproval.mutateAsync({ user: approval.principal, status: 'approved' as any });
+                      toast.success('User approved');
+                    } catch (err: any) {
+                      toast.error(err?.message ?? 'Failed');
+                    }
+                  }}
+                  disabled={setApproval.isPending}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={async () => {
+                    try {
+                      await setApproval.mutateAsync({ user: approval.principal, status: 'rejected' as any });
+                      toast.success('User rejected');
+                    } catch (err: any) {
+                      toast.error(err?.message ?? 'Failed');
+                    }
+                  }}
+                  disabled={setApproval.isPending}
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
-
-      <ConfirmModal
-        open={!!confirmAction}
-        title={confirmAction?.label ?? ''}
-        message={confirmAction?.message ?? ''}
-        confirmLabel={confirmAction?.label ?? 'Confirm'}
-        variant={confirmAction?.type === 'complete' ? 'destructive' : 'success'}
-        onConfirm={handleAction}
-        onCancel={() => setConfirmAction(null)}
-        isLoading={updateState.isPending || updatePlayerState.isPending}
-      />
     </div>
   );
 }
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { clear } = useInternetIdentity();
   const queryClient = useQueryClient();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('auction');
+  const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
 
-  const handleLogout = async () => {
-    await clear();
+  const handleLogout = () => {
+    localStorage.removeItem('adminLoggedIn');
     queryClient.clear();
-    void navigate({ to: '/admin/login' });
+    navigate({ to: '/admin/login' });
   };
 
-  const tabs = [
-    { id: 'auction', label: 'Auction Setup', icon: Settings },
-    { id: 'teams', label: 'Teams', icon: Users },
-    { id: 'players', label: 'Players', icon: Trophy },
-    { id: 'control', label: 'Live Control', icon: Play },
-  ];
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="max-w-sm w-full mx-4">
+          <CardContent className="pt-6 text-center space-y-4">
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
+            <div>
+              <h2 className="font-semibold text-lg">Access Denied</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                You need admin privileges to access this page.
+              </p>
+            </div>
+            <Button onClick={() => navigate({ to: '/admin/login' })} className="w-full">
+              Go to Admin Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <AppHeader />
-
-      <div className="flex-1 flex">
-        {/* Sidebar - Desktop */}
-        <aside className="hidden lg:flex flex-col w-56 border-r border-border bg-sidebar/50 p-4 gap-1">
-          <div className="flex items-center gap-2 px-3 py-2 mb-4">
-            <Shield className="w-5 h-5 text-cyan" />
-            <span className="font-semibold text-foreground text-sm">Admin Panel</span>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-primary" />
+            <span className="font-bold text-sm">Admin Dashboard</span>
           </div>
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left w-full ${
-                activeTab === id ? 'bg-cyan/10 text-cyan border border-cyan/20' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-              }`}>
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-          <div className="mt-auto pt-4 border-t border-border">
-            <button onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all">
-              <LogOut className="w-4 h-4" /> Logout
-            </button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate({ to: '/watch' })}
+              className="text-xs"
+            >
+              Watch Live
+              <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs">
+              Logout
+            </Button>
           </div>
-        </aside>
+        </div>
+      </header>
 
-        {/* Mobile Sidebar Overlay */}
-        {sidebarOpen && (
-          <div className="lg:hidden fixed inset-0 z-40 flex">
-            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-            <aside className="relative z-50 flex flex-col w-64 bg-sidebar border-r border-border p-4 gap-1 animate-slide-in-right">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-cyan" />
-                  <span className="font-semibold text-foreground text-sm">Admin Panel</span>
-                </div>
-                <button onClick={() => setSidebarOpen(false)} className="p-1 rounded text-muted-foreground hover:text-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {tabs.map(({ id, label, icon: Icon }) => (
-                <button key={id} onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left w-full ${
-                    activeTab === id ? 'bg-cyan/10 text-cyan border border-cyan/20' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                  }`}>
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </button>
-              ))}
-              <div className="mt-auto pt-4 border-t border-border">
-                <button onClick={handleLogout}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all">
-                  <LogOut className="w-4 h-4" /> Logout
-                </button>
-              </div>
-            </aside>
-          </div>
-        )}
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-4 py-6">
+        <Tabs defaultValue="players">
+          <TabsList className="mb-6 flex-wrap h-auto gap-1">
+            <TabsTrigger value="players" className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Players
+            </TabsTrigger>
+            <TabsTrigger value="teams" className="flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5" />
+              Teams
+            </TabsTrigger>
+            <TabsTrigger value="auction" className="flex items-center gap-1.5">
+              <Gavel className="w-3.5 h-3.5" />
+              Auction
+            </TabsTrigger>
+            <TabsTrigger value="approvals" className="flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5" />
+              Approvals
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          {/* Mobile header */}
-          <div className="lg:hidden flex items-center gap-3 p-4 border-b border-border">
-            <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary">
-              <Menu className="w-5 h-5" />
-            </button>
-            <h1 className="font-semibold text-foreground">
-              {tabs.find(t => t.id === activeTab)?.label}
-            </h1>
-          </div>
-
-          <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
-            {activeTab === 'auction' && <AuctionSetupSection />}
-            {activeTab === 'teams' && <TeamManagementSection />}
-            {activeTab === 'players' && <PlayerManagementSection />}
-            {activeTab === 'control' && <AuctionControlSection />}
-          </div>
-        </main>
-      </div>
-
-      <AppFooter />
+          <TabsContent value="players">
+            <PlayersTab />
+          </TabsContent>
+          <TabsContent value="teams">
+            <TeamsTab />
+          </TabsContent>
+          <TabsContent value="auction">
+            <AuctionTab />
+          </TabsContent>
+          <TabsContent value="approvals">
+            <ApprovalsTab />
+          </TabsContent>
+        </Tabs>
+      </main>
     </div>
   );
 }

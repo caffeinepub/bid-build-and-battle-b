@@ -1,76 +1,72 @@
 {
   "kind": "build_request",
-  "title": "Rewrite Admin Login with Dynamic Principal-Based Access",
-  "projectName": "Bid Build and Battle",
+  "title": "Fix admin login with passcode sastra2026 and resolve canister stopped error",
+  "projectName": "B³ Auction Platform",
   "priority": "high",
   "requirements": [
     {
       "id": "REQ-1",
-      "text": "Rewrite the AdminLogin page so that the 'This account does not have admin privileges' error is NOT shown before the user has attempted to log in. The error should only appear after a login attempt if the authenticated principal is not an admin.",
-      "target": "frontend",
+      "text": "Update the admin passcode in the backend to 'sastra2026'. The hardcoded admin passcode used in the adminLogin function must be changed to 'sastra2026' so that login succeeds with that value.",
+      "target": "backend",
       "source": {
         "messageIds": [
-          "msg-latest"
+          "msg-4"
         ],
         "quotes": [
-          "This account does not have admin privileges. Please use an admin account.",
-          "The sign in option shows this even before entering the mail account."
+          "Make it as sastra2026"
         ]
       },
       "acceptanceCriteria": [
-        "On initial page load, no error message is displayed",
-        "The error message only appears after a login attempt that fails the admin check",
-        "The 'Login with Internet Identity' button is visible and clickable on page load without any error state"
+        "Entering 'sastra2026' on the Admin Login page returns a successful session token and redirects to the admin dashboard",
+        "Entering any other passcode returns an authentication error"
       ]
     },
     {
       "id": "REQ-2",
-      "text": "Rewrite the admin access control in the backend so that the first user to log in via Internet Identity is automatically granted admin/owner status and stored in stable state, instead of relying on a hardcoded principal whitelist. If an admin already exists, only that stored principal retains admin access.",
+      "text": "Ensure the backend actor initializes and starts correctly on deployment so it does not enter a stopped state (IC0508). The actor must be self-contained, have no blocking pre-upgrade hooks that prevent startup, and handle upgrade gracefully to avoid the canister being left in a stopped state.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-latest"
+          "msg-8",
+          "msg-9"
         ],
         "quotes": [
-          "Admin login is not working how to access it",
-          "yes can you rewrite the admin login"
+          "Canister idkn6-jqaaa-aaaad-qiq3a-cai is stopped",
+          "IC0508"
         ]
       },
       "acceptanceCriteria": [
-        "The backend stores admin principal(s) in stable state",
-        "The first caller of an 'initialize admin' or equivalent function is stored as the admin",
-        "Subsequent callers are denied admin access unless their principal matches the stored admin",
-        "The isAdmin or equivalent query returns true only for the stored admin principal"
+        "After deployment, calling adminLogin from the frontend does not return IC0508 or 'canister is stopped' errors",
+        "The admin login page successfully authenticates with passcode 'sastra2026' without any replica rejection errors"
       ]
     },
     {
       "id": "REQ-3",
-      "text": "Update the AdminLogin page UI flow: after the user clicks 'Login with Internet Identity' and completes authentication, verify their principal against the backend. If they are admin, redirect to the Admin Dashboard. If not admin, show the error message and offer a logout/retry option. Add a clear instruction on the page explaining that the first login will claim admin rights.",
+      "text": "On the Admin Login page, when a backend/canister error occurs (such as IC0508 or replica rejection), display a user-friendly error message such as 'Service temporarily unavailable. Please try again.' instead of the raw rejection error text.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-latest"
+          "msg-8",
+          "msg-9"
         ],
         "quotes": [
-          "yes can you rewrite the admin login"
+          "The replica returned a rejection error",
+          "Canister idkn6-jqaaa-aaaad-qiq3a-cai is stopped Error code: IC0508"
         ]
       },
       "acceptanceCriteria": [
-        "Successful admin login redirects to /admin dashboard",
-        "Non-admin principals see the error only after login attempt",
-        "A logout/try different account option is shown alongside the error",
-        "Page includes a note explaining first-login admin claim behavior"
+        "When the backend returns a canister-stopped or replica rejection error, the login page shows a clean, readable error message instead of the raw JSON/error blob",
+        "The error message does not expose internal canister IDs or request IDs to the user"
       ]
     }
   ],
   "constraints": [
-    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui",
-    "Admin principal storage must use stable variables in the Motoko backend to survive canister upgrades"
+    "Admin passcode must be set to exactly 'sastra2026'",
+    "Do not modify files under frontend/src/hooks/useInternetIdentity.ts, frontend/src/hooks/useActor.ts, frontend/src/main.tsx, or frontend/src/components/ui"
   ],
   "nonGoals": [
-    "Adding multiple admin accounts or role tiers beyond a single admin/owner",
-    "Changing the Team Login flow",
-    "Redesigning the overall app theme or other pages"
+    "Changing any other authentication mechanism or team login flow",
+    "Modifying the auction, player, or team management logic beyond what is needed for this fix"
   ],
   "imageRequirements": {
     "required": [],

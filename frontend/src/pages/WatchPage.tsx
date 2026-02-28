@@ -195,7 +195,7 @@ export default function WatchPage() {
                           </Badge>
                         </div>
                         {currentPlayer.stats && (
-                          <p className="text-sm text-muted-foreground mt-2 italic">{currentPlayer.stats}</p>
+                          <p className="text-sm text-muted-foreground mt-2">{currentPlayer.stats}</p>
                         )}
                       </div>
 
@@ -210,56 +210,22 @@ export default function WatchPage() {
                         </BidHighlight>
                       </div>
 
-                      {leadingTeam ? (
+                      {leadingTeam && (
                         <div className="flex items-center gap-2 p-3 bg-cyan/10 rounded-xl border border-cyan/20">
-                          <TrendingUp className="w-4 h-4 text-cyan flex-shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Leading Bid</p>
-                            <p className="text-sm font-semibold text-cyan">{leadingTeam}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 p-3 bg-secondary rounded-xl border border-border">
-                          <Users className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                          <p className="text-sm text-muted-foreground">No bids yet — starting at base price</p>
+                          <TrendingUp className="w-4 h-4 text-cyan" />
+                          <span className="text-sm text-cyan font-medium">Leading: {leadingTeam}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                ) : isNotStarted ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 rounded-full bg-secondary flex items-center justify-center mx-auto mb-4">
-                      <Trophy className="w-10 h-10 text-muted-foreground opacity-50" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Auction Not Started</h3>
-                    <p className="text-muted-foreground text-sm">
-                      The auction hasn't begun yet. Check back soon!
-                    </p>
-                  </div>
-                ) : isCompleted ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 rounded-full bg-cyan/10 border border-cyan/20 flex items-center justify-center mx-auto mb-4">
-                      <Trophy className="w-10 h-10 text-cyan" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Auction Completed!</h3>
-                    <p className="text-muted-foreground text-sm mb-4">
-                      The auction has ended. View the final results below.
-                    </p>
-                    <a
-                      href="/results"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl gradient-cyan-pink text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-                    >
-                      View Results →
-                    </a>
-                  </div>
                 ) : (
                   <div className="text-center py-16">
-                    <div className="w-20 h-20 rounded-full bg-chart-4/10 border border-chart-4/20 flex items-center justify-center mx-auto mb-4">
-                      <Clock className="w-10 h-10 text-chart-4" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Auction Paused</h3>
-                    <p className="text-muted-foreground text-sm">
-                      The host has paused the auction. It will resume shortly.
+                    <Trophy className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-30" />
+                    <p className="text-lg font-medium text-muted-foreground">
+                      {isNotStarted ? 'Auction has not started yet' : 'No player on auction right now'}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {isNotStarted ? 'Check back soon!' : 'The host will put up the next player shortly.'}
                     </p>
                   </div>
                 )}
@@ -268,31 +234,26 @@ export default function WatchPage() {
 
             {/* Bid Feed */}
             {bidFeed.length > 0 && (
-              <div className="card-navy rounded-xl p-5 border border-border">
+              <div className="card-navy rounded-xl p-4 border border-border">
                 <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-cyan" />
-                  Recent Bids
+                  Live Bid Feed
                 </h3>
-                <ScrollArea className="h-52">
+                <ScrollArea className="h-48">
                   <div className="space-y-2">
-                    {bidFeed.map((bid, i) => (
+                    {bidFeed.map((entry, i) => (
                       <div
-                        key={bid.id}
-                        className={`flex items-center justify-between p-3 rounded-lg transition-all ${
-                          i === 0
-                            ? 'bg-cyan/10 border border-cyan/20'
-                            : 'bg-secondary'
+                        key={entry.id}
+                        className={`flex items-center justify-between p-2.5 rounded-lg ${
+                          i === 0 ? 'bg-cyan/10 border border-cyan/20' : 'bg-secondary'
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           {i === 0 && <TrendingUp className="w-3.5 h-3.5 text-cyan" />}
-                          <span className="text-sm font-medium text-foreground">{bid.team}</span>
-                          {i === 0 && (
-                            <Badge className="text-xs bg-cyan/20 text-cyan border-0 ml-1">Leading</Badge>
-                          )}
+                          <span className="text-sm font-medium text-foreground">{entry.team}</span>
                         </div>
                         <span className={`text-sm font-bold ${i === 0 ? 'text-cyan' : 'text-muted-foreground'}`}>
-                          {formatCurrency(bid.amount)}
+                          {formatCurrency(entry.amount)}
                         </span>
                       </div>
                     ))}
@@ -302,75 +263,40 @@ export default function WatchPage() {
             )}
           </div>
 
-          {/* Right: Info Panel */}
+          {/* Right: Player Pool */}
           <div className="space-y-4">
-            {/* How to Watch */}
             <div className="card-navy rounded-xl p-5 border border-border">
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Eye className="w-4 h-4 text-pink" />
-                Viewer Mode
+              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 text-pink" />
+                Player Pool ({totalPlayers})
               </h3>
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  You're watching the live auction as a spectator. No login required.
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { icon: '🔴', text: 'Live bids update in real time' },
-                    { icon: '⏱', text: 'Countdown timer per player' },
-                    { icon: '📊', text: 'Full bid history visible' },
-                    { icon: '🏆', text: 'Results after auction ends' },
-                  ].map((item) => (
-                    <div key={item.text} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{item.icon}</span>
-                      <span>{item.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Participate CTA */}
-            <div className="card-navy rounded-xl p-5 border border-pink/20 bg-pink/5">
-              <h3 className="text-sm font-semibold text-foreground mb-2">Want to Participate?</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Register your team and get approved by the host to start bidding.
-              </p>
-              <a
-                href="/team/register"
-                className="block w-full text-center px-4 py-2.5 rounded-xl bg-pink text-white text-sm font-semibold hover:bg-pink/90 transition-colors"
-              >
-                Register Team →
-              </a>
-              <a
-                href="/team/login"
-                className="block w-full text-center px-4 py-2.5 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-muted transition-colors mt-2"
-              >
-                Team Login
-              </a>
-            </div>
-
-            {/* Player Pool Stats */}
-            {totalPlayers > 0 && (
-              <div className="card-navy rounded-xl p-5 border border-border">
-                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-cyan" />
-                  Auction Stats
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total Players</span>
-                    <span className="font-semibold text-foreground">{totalPlayers}</span>
+              {!players || players.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No players added yet.</p>
+              ) : (
+                <ScrollArea className="h-80">
+                  <div className="space-y-2">
+                    {players.map(([id, player]) => (
+                      <div
+                        key={id.toString()}
+                        className={`flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                          currentPlayer?.name === player.name
+                            ? 'bg-cyan/10 border border-cyan/20'
+                            : 'bg-secondary hover:bg-muted'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{player.name}</p>
+                          <p className="text-xs text-muted-foreground">{getRoleLabel(player.role)}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-cyan ml-2 flex-shrink-0">
+                          {formatCurrency(player.basePrice)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Status</span>
-                    <span className={`font-semibold ${statusConfig.text}`}>
-                      {isLive ? 'Live' : isPaused ? 'Paused' : isCompleted ? 'Completed' : 'Not Started'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
+                </ScrollArea>
+              )}
+            </div>
           </div>
         </div>
       </main>

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Player } from '../backend';
-import { PlayerRole, PlayerCategory } from '../hooks/useQueries';
+import { PlayerRole, PlayerCategory } from '../backend';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, getRoleLabel, getCategoryLabel, getRoleColor } from '../lib/utils';
 

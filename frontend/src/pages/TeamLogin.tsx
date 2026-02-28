@@ -61,42 +61,47 @@ export default function TeamLogin() {
       <div className="min-h-screen flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4 py-12">
           <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-cyan-pink shadow-cyan-glow mb-4">
+                <Trophy className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-gradient">B³</h1>
+              <p className="text-muted-foreground text-sm mt-1">Bid Build Battle</p>
+            </div>
+
             <div className="card-navy rounded-2xl p-8 shadow-card text-center">
               <div className="w-16 h-16 rounded-full bg-chart-4/10 border border-chart-4/20 flex items-center justify-center mx-auto mb-4">
                 <Clock className="w-8 h-8 text-chart-4" />
               </div>
-              <h2 className="text-xl font-bold text-foreground mb-2">Awaiting Host Approval</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">Awaiting Approval</h2>
               <p className="text-muted-foreground text-sm mb-6">
-                Your account is pending approval from the auction host. You'll be notified once approved.
+                {profile?.name ? `Hi ${profile.name}, your` : 'Your'} team registration is pending admin approval.
+                You'll be able to participate once approved.
               </p>
-              {profile && (
-                <div className="bg-secondary rounded-lg p-3 mb-6 text-left">
-                  <p className="text-xs text-muted-foreground">Logged in as</p>
-                  <p className="text-sm font-medium text-foreground">{profile.name}</p>
-                  <p className="text-xs text-muted-foreground">{profile.email}</p>
-                </div>
-              )}
-              <Button
-                onClick={handleRequestApproval}
-                disabled={requestApproval.isPending}
-                className="w-full gradient-cyan-pink text-white font-semibold rounded-xl hover:opacity-90"
-              >
-                {requestApproval.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending...
-                  </span>
-                ) : (
-                  'Request Approval'
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => clear()}
-                className="w-full mt-3 text-muted-foreground hover:text-foreground"
-              >
-                Logout
-              </Button>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={handleRequestApproval}
+                  disabled={requestApproval.isPending}
+                  className="w-full gradient-cyan-pink text-white font-semibold rounded-xl hover:opacity-90"
+                >
+                  {requestApproval.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending Request...
+                    </span>
+                  ) : (
+                    'Request Approval'
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={async () => { await clear(); }}
+                  className="w-full text-muted-foreground hover:text-foreground"
+                >
+                  Logout
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -107,15 +112,8 @@ export default function TeamLogin() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/assets/generated/stadium-hero.dim_1920x1080.png')" }}
-        />
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-        <div className="absolute top-1/3 right-1/4 w-48 h-48 rounded-full bg-pink/5 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 w-full max-w-md mx-auto px-4 py-12">
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-cyan-pink shadow-cyan-glow mb-4">
               <Trophy className="w-8 h-8 text-white" />
@@ -126,18 +124,14 @@ export default function TeamLogin() {
 
           <div className="card-navy rounded-2xl p-8 shadow-card">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-pink/10 border border-pink/20 flex items-center justify-center">
-                <Users className="w-5 h-5 text-pink" />
+              <div className="w-10 h-10 rounded-xl bg-cyan/10 border border-cyan/20 flex items-center justify-center">
+                <Users className="w-5 h-5 text-cyan" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-foreground">Team Login</h2>
-                <p className="text-xs text-muted-foreground">Team Owner access</p>
+                <p className="text-xs text-muted-foreground">Sign in to participate in the auction</p>
               </div>
             </div>
-
-            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-              Sign in with your Internet Identity to access your team dashboard and participate in the auction.
-            </p>
 
             {loginError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 mb-4">
@@ -149,40 +143,32 @@ export default function TeamLogin() {
             <Button
               onClick={handleLogin}
               disabled={isLoggingIn || isInitializing}
-              className="w-full h-12 bg-pink text-white font-semibold rounded-xl hover:bg-pink/90 transition-colors shadow-pink-glow"
+              className="w-full h-12 gradient-cyan-pink text-white font-semibold rounded-xl hover:opacity-90"
             >
-              {isLoggingIn || isInitializing ? (
+              {isLoggingIn ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Connecting...
                 </span>
-              ) : (
+              ) : isInitializing ? (
                 <span className="flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Login with Internet Identity
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Initializing...
                 </span>
+              ) : (
+                'Login with Internet Identity'
               )}
             </Button>
 
-            <div className="mt-4 space-y-2 text-center">
-              <p className="text-xs text-muted-foreground">
-                New team?{' '}
-                <button
-                  onClick={() => void navigate({ to: '/team/register' })}
-                  className="text-cyan hover:text-cyan/80 transition-colors"
-                >
-                  Register here →
-                </button>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Admin?{' '}
-                <button
-                  onClick={() => void navigate({ to: '/admin/login' })}
-                  className="text-cyan hover:text-cyan/80 transition-colors"
-                >
-                  Admin Login →
-                </button>
-              </p>
+            <div className="mt-6 pt-6 border-t border-border text-center">
+              <p className="text-xs text-muted-foreground mb-3">Don't have a team yet?</p>
+              <Button
+                variant="outline"
+                onClick={() => void navigate({ to: '/team/register' })}
+                className="w-full border-border text-muted-foreground hover:text-foreground"
+              >
+                Register a Team
+              </Button>
             </div>
           </div>
         </div>

@@ -59,11 +59,9 @@ function exportToCSV(teams: Team[], players: Array<[bigint, Player]>) {
 
   for (const team of teams) {
     if (team.status !== TeamStatus.approved) continue;
-    // In a real app, players would be linked to teams via backend
     rows.push(`${team.name},${team.owner},—,—,—,—`);
   }
 
-  // All players summary
   rows.push('');
   rows.push('Player Pool');
   rows.push('ID,Name,Role,Category,Base Price');
@@ -198,7 +196,8 @@ function TeamsTab({ teams }: { teams: Team[] }) {
 function PlayersTab({ players }: { players: Array<[bigint, Player]> }) {
   const [filter, setFilter] = useState<string>('all');
 
-  const roles = ['all', ...Object.values(PlayerRole)];
+  // Cast Object.values to string[] to avoid TypeScript unknown inference
+  const roles: string[] = ['all', ...(Object.values(PlayerRole) as string[])];
 
   const filtered = filter === 'all'
     ? players
@@ -311,92 +310,51 @@ export default function ResultsPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan/10 border border-cyan/20 mb-3">
               <BarChart3 className="w-4 h-4 text-cyan" />
-              <span className="text-xs font-medium text-cyan">Auction Results</span>
+              <span className="text-sm font-medium text-cyan">Auction Results</span>
             </div>
-            <h1 className="text-3xl font-bold text-gradient">Results & Statistics</h1>
-            <p className="text-muted-foreground mt-1">
-              {isCompleted
-                ? 'The auction has concluded. Here are the final results.'
-                : 'Live auction data — results will be finalized when the auction ends.'}
+            <h1 className="text-3xl font-bold text-gradient">Results & Stats</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              {isCompleted ? 'Auction completed — final results below.' : 'Live auction data — updates in real time.'}
             </p>
           </div>
-
-          {/* Export Buttons */}
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-2">
             <Button
+              variant="outline"
+              size="sm"
               onClick={handleExportCSV}
               disabled={isLoading || !teams || !players}
-              variant="outline"
-              size="sm"
-              className="border-cyan/30 text-cyan hover:bg-cyan/10 gap-2"
+              className="gap-2"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              Export CSV
+              CSV
             </Button>
             <Button
-              onClick={handleExportJSON}
-              disabled={isLoading || !teams || !players}
               variant="outline"
               size="sm"
-              className="border-pink/30 text-pink hover:bg-pink/10 gap-2"
+              onClick={handleExportJSON}
+              disabled={isLoading || !teams || !players}
+              className="gap-2"
             >
               <Download className="w-4 h-4" />
-              Export JSON
+              JSON
             </Button>
           </div>
         </div>
 
-        {/* Auction Status */}
-        {!isCompleted && (
-          <div className={`flex items-center gap-3 p-4 rounded-xl border mb-6 ${
-            auctionState === AuctionStatus.live
-              ? 'bg-chart-3/10 border-chart-3/20'
-              : 'bg-secondary border-border'
-          }`}>
-            <div className={`w-2.5 h-2.5 rounded-full ${
-              auctionState === AuctionStatus.live ? 'bg-chart-3 animate-pulse' : 'bg-muted-foreground'
-            }`} />
-            <span className="text-sm font-medium text-foreground">
-              {auctionState === AuctionStatus.live
-                ? '🔴 Auction is currently LIVE — results will update in real time'
-                : auctionState === AuctionStatus.paused
-                ? '⏸ Auction is paused'
-                : '⏳ Auction has not started yet'}
-            </span>
-          </div>
-        )}
-
         {isLoading ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="card-navy rounded-xl p-4 border border-border">
-                  <SkeletonLoader variant="text" count={2} />
-                </div>
-              ))}
-            </div>
-            <SkeletonLoader variant="table-row" count={5} />
-          </div>
+          <SkeletonLoader variant="card" count={4} />
         ) : (
           <>
-            {/* Summary Stats */}
             <SummaryStats teams={teams ?? []} players={players ?? []} />
 
-            {/* Tabs */}
             <Tabs defaultValue="teams">
-              <TabsList className="bg-secondary border border-border mb-6">
-                <TabsTrigger
-                  value="teams"
-                  className="data-[state=active]:bg-cyan/20 data-[state=active]:text-cyan"
-                >
-                  <Users className="w-4 h-4 mr-1.5" />
+              <TabsList className="mb-6">
+                <TabsTrigger value="teams" className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
                   Teams ({teams?.length ?? 0})
                 </TabsTrigger>
-                <TabsTrigger
-                  value="players"
-                  className="data-[state=active]:bg-cyan/20 data-[state=active]:text-cyan"
-                >
-                  <Trophy className="w-4 h-4 mr-1.5" />
+                <TabsTrigger value="players" className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4" />
                   Players ({players?.length ?? 0})
                 </TabsTrigger>
               </TabsList>
@@ -404,7 +362,6 @@ export default function ResultsPage() {
               <TabsContent value="teams">
                 <TeamsTab teams={teams ?? []} />
               </TabsContent>
-
               <TabsContent value="players">
                 <PlayersTab players={players ?? []} />
               </TabsContent>

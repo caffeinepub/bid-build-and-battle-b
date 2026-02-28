@@ -1,19 +1,17 @@
 import Int "mo:core/Int";
 import Time "mo:core/Time";
-import Array "mo:core/Array";
 import Map "mo:core/Map";
+import Nat "mo:core/Nat";
 import Text "mo:core/Text";
-import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
-import Blob "mo:core/Blob";
 import Iter "mo:core/Iter";
-import Migration "migration";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import UserApproval "user-approval/approval";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
+import Migration "migration";
 
 (with migration = Migration.run)
 actor {
@@ -61,9 +59,6 @@ actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Owner (admin) management — first authenticated caller becomes admin
-  var owner : ?Principal = null;
-
   // Approval Management
   let approvalState = UserApproval.initState(accessControlState);
 
@@ -107,15 +102,6 @@ actor {
     ownerPrincipal : ?Principal;
   };
 
-  module Team {
-    public func compare(team1 : Team, team2 : Team) : Order.Order {
-      switch (Int.compare(team1.registeredTime, team2.registeredTime)) {
-        case (#equal) { Text.compare(team1.name, team2.name) };
-        case (order) { order };
-      };
-    };
-  };
-
   let registeredTeams = Map.empty<Text, Team>();
 
   // Players Management
@@ -143,36 +129,32 @@ actor {
 
   // Auction Current State
   var _currentAuctionState : ?AuctionStatus = null;
-
-  // Public: anyone (including /watch page viewers) can read auction state
-  public query func currentAuctionState() : async ?AuctionStatus { _currentAuctionState };
-
-  // Public: anyone (including /watch page viewers) can read current player
-  public query func currentPlayer() : async ?Player { _currentPlayer };
-
   var _currentPlayer : ?Player = null;
 
+  public query func currentAuctionState() : async ?AuctionStatus { _currentAuctionState };
+  public query func currentPlayer() : async ?Player { _currentPlayer };
+
   public query ({ caller }) func myRole() : async AccessControl.UserRole {
-    switch (owner) {
-      case (?o) {
-        if (caller == o) { return #admin };
-      };
-      case (null) { () };
-    };
-    #user;
+    AccessControl.getUserRole(accessControlState, caller);
   };
 
-  // Check admin status based solely on stored owner principal
   public query ({ caller }) func isAdmin() : async Bool {
-    switch (owner) {
-      case (?o) { caller == o };
-      case (null) { false };
+    AccessControl.isAdmin(accessControlState, caller);
+  };
+
+  /// Admin login using a passcode
+  public shared ({ caller }) func adminLogin(passcode : Text) : async () {
+    if (passcode != "sastra2026") {
+      Runtime.trap("Incorrect passcode");
     };
+    AccessControl.initialize(accessControlState, caller, "", "");
   };
 
   // Auction Setup — admin only
   public shared ({ caller }) func createAuction(name : Text, dateTime : Int, budget : Nat, increment : Nat, minSquadSize : Nat, maxSquadSize : Nat) : async AuctionId {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let auctionId = nextAuctionId;
     nextAuctionId += 1;
 
@@ -209,8 +191,10 @@ actor {
 
   // Admin-only: view all teams
   public query ({ caller }) func getTeams() : async [Team] {
-    guardIsAdmin(caller);
-    registeredTeams.values().toArray().sort();
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+    registeredTeams.values().toArray();
   };
 
   // Admin or the team owner can view a specific team
@@ -227,7 +211,7 @@ actor {
       case (?p) { p == caller };
       case (null) { false };
     };
-    if (not callerIsAdmin(caller) and not isOwner) {
+    if (not AccessControl.isAdmin(accessControlState, caller) and not isOwner) {
       Runtime.trap("Unauthorized: Can only view your own team");
     };
     team;
@@ -235,7 +219,9 @@ actor {
 
   // Admin-only: approve a team
   public shared ({ caller }) func approveTeam(name : Text) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let team = switch (registeredTeams.get(name)) {
       case (null) { Runtime.trap("Team does not exist") };
       case (?t) { t };
@@ -245,7 +231,9 @@ actor {
 
   // Admin-only: reject a team
   public shared ({ caller }) func rejectTeam(name : Text) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let team = switch (registeredTeams.get(name)) {
       case (null) { Runtime.trap("Team does not exist") };
       case (?t) { t };
@@ -255,7 +243,9 @@ actor {
 
   // Admin-only: add a player
   public shared ({ caller }) func addPlayer(name : Text, role : PlayerRole, category : PlayerCategory, basePrice : Nat, stats : ?Text, photo : Storage.ExternalBlob, isDeletable : Bool) : async Nat {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let playerId = nextPlayerId;
     nextPlayerId += 1;
 
@@ -271,7 +261,11 @@ actor {
 
     players.add(playerId, player);
 
-    if (category == #foreign and isDeletable) {
+    // Correctly increment foreign player count if applicable
+    if (category == #foreign) {
+      if (foreignPlayerLimit.currentCount + 1 > foreignPlayerLimit.maxCount) {
+        Runtime.trap("Cannot add more foreign players, limit reached");
+      };
       foreignPlayerLimit := {
         foreignPlayerLimit with currentCount = foreignPlayerLimit.currentCount + 1;
       };
@@ -282,11 +276,18 @@ actor {
 
   // Admin-only: delete a player (only if deletable)
   public shared ({ caller }) func deletePlayer(playerId : Nat) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     switch (players.get(playerId)) {
       case (null) { Runtime.trap("Player does not exist") };
       case (?player) {
         if (not (player.isDeletable)) { Runtime.trap("Player cannot be deleted at this stage") };
+        if (player.category == #foreign) {
+          foreignPlayerLimit := {
+            foreignPlayerLimit with currentCount = foreignPlayerLimit.currentCount - 1;
+          };
+        };
       };
     };
     players.remove(playerId);
@@ -307,13 +308,17 @@ actor {
 
   // Admin-only: update auction state
   public shared ({ caller }) func updateAuctionState(state : AuctionStatus) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     _currentAuctionState := ?state;
   };
 
   // Admin-only: set current player on auction
   public shared ({ caller }) func updateCurrentPlayer(playerId : Nat) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let player = switch (players.get(playerId)) {
       case (null) { Runtime.trap("Player does not exist") };
       case (?p) { p };
@@ -323,7 +328,9 @@ actor {
 
   // Admin-only: update player deletable state
   public shared ({ caller }) func updatePlayerState(playerId : Nat, isDeletable : Bool) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     let updatedPlayer = switch (players.get(playerId)) {
       case (null) { Runtime.trap("Player does not exist") };
       case (?player) { { player with isDeletable } };
@@ -333,7 +340,7 @@ actor {
 
   // Approval System
   public query ({ caller }) func isCallerApproved() : async Bool {
-    callerIsAdmin(caller) or UserApproval.isApproved(approvalState, caller);
+    AccessControl.isAdmin(accessControlState, caller) or UserApproval.isApproved(approvalState, caller);
   };
 
   // Any authenticated user can request approval
@@ -346,13 +353,17 @@ actor {
 
   // Admin-only: set approval status for a user
   public shared ({ caller }) func setApproval(user : Principal, status : UserApproval.ApprovalStatus) : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     UserApproval.setApproval(approvalState, user, status);
   };
 
   // Admin-only: list all approval requests
   public query ({ caller }) func listApprovals() : async [UserApproval.UserApprovalInfo] {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     UserApproval.listApprovals(approvalState);
   };
 
@@ -369,7 +380,7 @@ actor {
       case (?p) { p == caller };
       case (null) { false };
     };
-    if (not callerIsAdmin(caller) and not isOwner) {
+    if (not AccessControl.isAdmin(accessControlState, caller) and not isOwner) {
       Runtime.trap("Unauthorized: Can only view your own team");
     };
     team;
@@ -377,7 +388,9 @@ actor {
 
   // Admin-only: approve all teams at once
   public shared ({ caller }) func approveAllTeams() : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     for ((name, team) in registeredTeams.entries()) {
       registeredTeams.add(name, { team with status = #approved });
     };
@@ -385,36 +398,11 @@ actor {
 
   // Admin-only: reject all teams at once
   public shared ({ caller }) func rejectAllTeams() : async () {
-    guardIsAdmin(caller);
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
     for ((name, team) in registeredTeams.entries()) {
       registeredTeams.add(name, { team with status = #rejected });
     };
-  };
-
-  // Returns true if caller is the stored admin owner
-  func callerIsAdmin(caller : Principal) : Bool {
-    switch (owner) {
-      case (?o) { caller == o };
-      case (null) { false };
-    };
-  };
-
-  // Guards admin-only actions.
-  // If no owner is set yet, the first authenticated (non-anonymous) caller becomes admin.
-  func guardIsAdmin(caller : Principal) {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Anonymous principals cannot become admin");
-    };
-    switch (owner) {
-      case (null) {
-        // First authenticated caller becomes the admin/owner
-        owner := ?caller;
-        return;
-      };
-      case (?o) {
-        if (caller == o) { return };
-      };
-    };
-    Runtime.trap("Unauthorized: Only admins can perform this action");
   };
 };
