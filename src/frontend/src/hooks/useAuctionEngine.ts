@@ -25,6 +25,7 @@ import {
   saveAuctionEngine,
   skipCurrentPlayer,
   startAuctionEngine,
+  subscribeToEngineUpdates,
 } from "../lib/auctionStore";
 
 export interface UseAuctionEngineResult {
@@ -79,7 +80,7 @@ export function useAuctionEngine(): UseAuctionEngineResult {
   const [engine, setEngine] = useState<AuctionEngine | null>(() =>
     getAuctionEngine(),
   );
-  const [timerSeconds, setTimerSeconds] = useState(15);
+  const [timerSeconds, setTimerSeconds] = useState(60);
   // Poll local players every 2s
   const [allPlayers, setAllPlayers] = useState<LocalPlayer[]>(() =>
     getLocalPlayers(),
@@ -98,6 +99,15 @@ export function useAuctionEngine(): UseAuctionEngineResult {
     poll(); // immediate
     const id = setInterval(poll, 2000);
     return () => clearInterval(id);
+  }, []);
+
+  // BroadcastChannel: instantly receive engine updates from other tabs on same device
+  useEffect(() => {
+    const unsubscribe = subscribeToEngineUpdates((updatedEngine) => {
+      setEngine(updatedEngine);
+      setTimerSeconds(getTimerSecondsRemaining(updatedEngine));
+    });
+    return unsubscribe;
   }, []);
 
   // Also update timer every second for smooth countdown
@@ -126,7 +136,7 @@ export function useAuctionEngine(): UseAuctionEngineResult {
       bidIncrement: number,
       maxSquadSize: number,
       maxForeignPlayers: number,
-      timerDuration = 15,
+      timerDuration = 60,
     ) => {
       // Build teams from localStorage
       const storedTeams = getTeams();

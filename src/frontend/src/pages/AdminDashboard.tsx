@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -32,6 +33,7 @@ import {
   Check,
   CheckCircle,
   Copy,
+  Download,
   Edit,
   Gavel,
   Key,
@@ -39,6 +41,7 @@ import {
   Plus,
   Radio,
   RefreshCw,
+  Share2,
   Trash2,
   Trophy,
   UserCheck,
@@ -48,16 +51,8 @@ import {
 import type React from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { useActor } from "../hooks/useActor";
-import {
-  useApproveAllTeams,
-  useApproveTeam,
-  useGetTeams,
-  useListApprovals,
-  useRejectAllTeams,
-  useRejectTeam,
-  useSetApproval,
-} from "../hooks/useQueries";
+import { useListApprovals, useSetApproval } from "../hooks/useQueries";
+// Note: useActor is not needed here — admin approval now uses localStorage
 import {
   type AuctionRoom,
   type LocalPlayer,
@@ -67,16 +62,21 @@ import {
   addAuctionRoom,
   addLocalPlayer,
   addTeam,
+  approveTeamLocal,
   deleteLocalPlayer,
   generateRoomKey,
   getAuctionEngine,
   getAuctionRooms,
   getLocalPlayers,
   getTeams,
+  rejectTeamLocal,
+  resetAllAuctionData,
+  resetAuctionEngineOnly,
   syncTeamToEngine,
   updateLocalPlayer,
 } from "../lib/auctionStore";
 import { clearAdminSession } from "../lib/authConstants";
+import { exportCredentials } from "../lib/sessionExport";
 
 // ─── Add Player Form ──────────────────────────────────────────────────────────
 
@@ -703,148 +703,205 @@ function PlayersTab() {
   );
 }
 
-// ─── Teams Tab ────────────────────────────────────────────────────────────────
+// ─── Teams Tab (localStorage-based approval management) ───────────────────────
 
 function TeamsTab() {
-  const { data: teams, isLoading } = useGetTeams();
-  const approveTeam = useApproveTeam();
-  const rejectTeam = useRejectTeam();
-  const approveAll = useApproveAllTeams();
-  const rejectAll = useRejectAllTeams();
+  const [teams, setTeams] = useState<TeamRecord[]>(() => getTeams());
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const refresh = () => setTeams(getTeams());
+
+  const handleApprove = (teamId: string, teamName: string) => {
+    approveTeamLocal(teamId);
+    refresh();
+    toast.success(`${teamName} approved ✓`);
+  };
+
+  const handleReject = (teamId: string, teamName: string) => {
+    rejectTeamLocal(teamId);
+    refresh();
+    toast.error(`${teamName} rejected`);
+  };
+
+  const handleApproveAll = () => {
+    const pendingTeams = teams.filter(
+      (t) => (t.approvalStatus ?? "pending") === "pending",
+    );
+    for (const t of pendingTeams) approveTeamLocal(t.teamId);
+    refresh();
+    toast.success(`${pendingTeams.length} team(s) approved`);
+  };
+
+  const getStatusBadge = (
+    status: "pending" | "approved" | "rejected" | undefined,
+  ) => {
+    switch (status ?? "pending") {
       case "approved":
         return (
           <Badge className="bg-green-500/20 text-green-400 border-green-500/30 border">
-            Approved
+            ✓ Approved
           </Badge>
         );
       case "rejected":
         return (
           <Badge className="bg-red-500/20 text-red-400 border-red-500/30 border">
-            Rejected
+            ✗ Rejected
           </Badge>
         );
       default:
         return (
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 border">
-            Pending
+            ⏳ Pending
           </Badge>
         );
     }
   };
 
+  const pendingCount = teams.filter(
+    (t) => (t.approvalStatus ?? "pending") === "pending",
+  ).length;
+  const auctions = getAuctionRooms();
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          {teams?.length ?? 0} registered teams
-        </h3>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-foreground">
+            Team Approvals
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {teams.length} team{teams.length !== 1 ? "s" : ""} registered
+            {pendingCount > 0 && (
+              <span className="text-yellow-400 ml-1 font-semibold">
+                · {pendingCount} pending
+              </span>
+            )}
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button
             size="sm"
             variant="outline"
-            onClick={async () => {
-              try {
-                await approveAll.mutateAsync();
-                toast.success("All teams approved");
-              } catch (err: unknown) {
-                toast.error(err instanceof Error ? err.message : "Failed");
-              }
-            }}
-            disabled={approveAll.isPending}
+            data-ocid="teams.confirm_button"
+            onClick={handleApproveAll}
+            disabled={pendingCount === 0}
+            className="text-green-400 border-green-500/30 hover:bg-green-500/10 gap-1.5"
           >
-            <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-            Approve All
+            <CheckCircle className="w-3.5 h-3.5" />
+            Approve All Pending
           </Button>
           <Button
             size="sm"
-            variant="destructive"
-            onClick={async () => {
-              try {
-                await rejectAll.mutateAsync();
-                toast.success("All teams rejected");
-              } catch (err: unknown) {
-                toast.error(err instanceof Error ? err.message : "Failed");
-              }
-            }}
-            disabled={rejectAll.isPending}
+            variant="outline"
+            data-ocid="teams.secondary_button"
+            onClick={refresh}
+            className="gap-1.5"
           >
-            <XCircle className="w-3.5 h-3.5 mr-1.5" />
-            Reject All
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
           </Button>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-          ))}
-        </div>
-      ) : !teams || teams.length === 0 ? (
-        <p className="text-muted-foreground text-sm text-center py-8">
-          No teams registered yet.
+      {/* Approval instructions */}
+      <div className="rounded-xl border border-cyan/20 bg-cyan/5 p-4">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          <span className="text-cyan font-semibold">How it works:</span> Teams
+          enter their Room Key and Passkey on the login page. If their status is{" "}
+          <span className="text-yellow-400">Pending</span>, they'll see a
+          waiting screen until you approve them here. After approval, they
+          auto-redirect to the auction. After approving, use{" "}
+          <span className="text-cyan">Export Credentials</span> in the Rooms
+          &amp; Teams tab so teams can import the updated approval status.
+        </p>
+      </div>
+
+      {teams.length === 0 ? (
+        <p
+          className="text-muted-foreground text-sm text-center py-8"
+          data-ocid="teams.empty_state"
+        >
+          No teams added yet. Go to Rooms &amp; Teams to add teams.
         </p>
       ) : (
-        <div className="space-y-3">
-          {teams.map((team) => (
-            <div
-              key={team.name}
-              className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/50"
-            >
-              <div>
-                <p className="font-medium text-sm">{team.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {team.owner} · {team.email}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {getStatusBadge(team.status)}
-                {team.status === "pending" && (
-                  <>
+        <div className="space-y-3" data-ocid="teams.list">
+          {teams.map((team, idx) => {
+            const auction = auctions.find(
+              (a) => a.auctionId === team.auctionId,
+            );
+            const status = team.approvalStatus ?? "pending";
+            return (
+              <div
+                key={team.teamId}
+                data-ocid={`teams.item.${idx + 1}`}
+                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                  status === "approved"
+                    ? "border-green-500/20 bg-green-500/5"
+                    : status === "rejected"
+                      ? "border-red-500/20 bg-red-500/5"
+                      : "border-yellow-500/20 bg-yellow-500/5"
+                }`}
+              >
+                <div className="min-w-0 mr-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm text-foreground">
+                      {team.teamName}
+                    </p>
+                    {getStatusBadge(team.approvalStatus)}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                    <span className="font-mono text-xs text-green-400">
+                      {team.passkey}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      · ₹{(team.budgetRemaining / 10_000_000).toFixed(1)} Cr
+                    </span>
+                    {auction && (
+                      <span className="text-xs text-muted-foreground">
+                        · {auction.auctionName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {status !== "approved" && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-green-400 border-green-500/30 hover:bg-green-500/10"
-                      onClick={async () => {
-                        try {
-                          await approveTeam.mutateAsync(team.name);
-                          toast.success(`${team.name} approved`);
-                        } catch (err: unknown) {
-                          toast.error(
-                            err instanceof Error ? err.message : "Failed",
-                          );
-                        }
-                      }}
-                      disabled={approveTeam.isPending}
+                      data-ocid={`teams.confirm_button.${idx + 1}`}
+                      onClick={() => handleApprove(team.teamId, team.teamName)}
+                      className="text-green-400 border-green-500/30 hover:bg-green-500/10 gap-1.5"
                     >
                       <CheckCircle className="w-3.5 h-3.5" />
+                      Approve
                     </Button>
+                  )}
+                  {status !== "rejected" && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-red-400 border-red-500/30 hover:bg-red-500/10"
-                      onClick={async () => {
-                        try {
-                          await rejectTeam.mutateAsync(team.name);
-                          toast.success(`${team.name} rejected`);
-                        } catch (err: unknown) {
-                          toast.error(
-                            err instanceof Error ? err.message : "Failed",
-                          );
-                        }
-                      }}
-                      disabled={rejectTeam.isPending}
+                      data-ocid={`teams.delete_button.${idx + 1}`}
+                      onClick={() => handleReject(team.teamId, team.teamName)}
+                      className="text-red-400 border-red-500/30 hover:bg-red-500/10 gap-1.5"
                     >
                       <XCircle className="w-3.5 h-3.5" />
+                      Reject
                     </Button>
-                  </>
-                )}
+                  )}
+                  {status === "approved" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-ocid={`teams.delete_button.${idx + 1}`}
+                      onClick={() => handleReject(team.teamId, team.teamName)}
+                      className="text-muted-foreground hover:text-red-400 text-xs"
+                    >
+                      Revoke
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -949,9 +1006,85 @@ function ApprovalsTab() {
 
 function AuctionTab() {
   const navigate = useNavigate();
+  const [engine, setEngine] = useState(() => getAuctionEngine());
+
+  const isCompleted = engine?.status === "completed";
+
+  const handleNewAuction = () => {
+    resetAllAuctionData();
+    setEngine(null);
+    toast.success(
+      "All data cleared. Create a new auction room, add teams and players, then go to the Auction Room.",
+    );
+  };
+
+  const handleResetEngine = () => {
+    resetAuctionEngineOnly();
+    setEngine(null);
+    toast.success(
+      "Auction reset. Same teams are ready. Go to Auction Room to set up a new round.",
+    );
+  };
 
   return (
     <div className="space-y-6">
+      {/* Completed auction banner */}
+      {isCompleted && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-yellow-400">
+              <Trophy className="w-4 h-4" />
+              Auction Completed
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              The previous auction has ended. Choose an option to continue:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl border border-cyan/20 bg-cyan/5 space-y-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Re-run with same teams
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Keeps all teams and their passkeys. Resets budgets, squads,
+                  and engine. You can add new players.
+                </p>
+                <Button
+                  data-ocid="auction_tab.secondary_button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResetEngine}
+                  className="border-cyan/30 text-cyan hover:bg-cyan/10 gap-1.5 w-full"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Re-run (same teams)
+                </Button>
+              </div>
+              <div className="p-4 rounded-xl border border-pink/20 bg-pink/5 space-y-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Start brand new auction
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Wipes everything — all teams, players, rooms, and engine
+                  state. A completely fresh start.
+                </p>
+                <Button
+                  data-ocid="auction_tab.delete_button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleNewAuction}
+                  className="border-pink/30 text-pink hover:bg-pink/10 gap-1.5 w-full"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  New Auction
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -1354,11 +1487,28 @@ function RoomsTeamsTab() {
                               <p className="font-medium text-sm text-foreground">
                                 {team.teamName}
                               </p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {team.teamId} · ₹
-                                {(team.budgetRemaining / 10_000_000).toFixed(1)}{" "}
-                                Cr · {team.playersBought} players
-                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className="text-xs text-muted-foreground">
+                                  {team.teamId} · ₹
+                                  {(team.budgetRemaining / 10_000_000).toFixed(
+                                    1,
+                                  )}{" "}
+                                  Cr
+                                </span>
+                                <span
+                                  className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
+                                    (team.approvalStatus ?? "pending") ===
+                                    "approved"
+                                      ? "bg-green-500/20 text-green-400 border-green-500/30"
+                                      : (team.approvalStatus ?? "pending") ===
+                                          "rejected"
+                                        ? "bg-red-500/20 text-red-400 border-red-500/30"
+                                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                                  }`}
+                                >
+                                  {team.approvalStatus ?? "pending"}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <code className="font-mono text-sm bg-secondary px-2 py-1 rounded border border-border text-green-400">
@@ -1377,7 +1527,144 @@ function RoomsTeamsTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Export Credentials Card */}
+      <ExportCredentialsCard />
     </div>
+  );
+}
+
+// ─── Export Credentials Card ──────────────────────────────────────────────────
+
+function ExportCredentialsCard() {
+  const [exportCode, setExportCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleExport = () => {
+    const code = exportCredentials();
+    setExportCode(code);
+    setCopied(false);
+  };
+
+  const handleCopy = async () => {
+    if (!exportCode) return;
+    await navigator.clipboard.writeText(exportCode);
+    setCopied(true);
+    toast.success("Export code copied! Share it with your teams.");
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  const auctions = getAuctionRooms();
+  const teams = getTeams();
+
+  return (
+    <Card className="border-cyan/20 bg-cyan/5">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Share2 className="w-4 h-4 text-cyan" />
+          Export Credentials for Cross-Device Access
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Teams joining from{" "}
+          <span className="text-foreground font-medium">
+            different devices or browsers
+          </span>{" "}
+          need this export code to load your auction data. Generate it and share
+          it along with each team's passkey and the room key.
+        </p>
+
+        <div className="rounded-xl border border-border/50 bg-muted/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground">
+            <span className="text-foreground font-semibold">
+              {auctions.length}
+            </span>{" "}
+            room
+            {auctions.length !== 1 ? "s" : ""} ·{" "}
+            <span className="text-foreground font-semibold">
+              {teams.length}
+            </span>{" "}
+            team
+            {teams.length !== 1 ? "s" : ""} will be included in export
+          </div>
+          <Button
+            data-ocid="rooms_teams.primary_button"
+            onClick={handleExport}
+            disabled={auctions.length === 0}
+            className="gap-2 gradient-cyan-pink text-white font-semibold shrink-0"
+            size="sm"
+          >
+            <Download className="w-4 h-4" />
+            Generate Export Code
+          </Button>
+        </div>
+
+        {exportCode && (
+          <div className="space-y-3">
+            <div className="relative">
+              <Textarea
+                readOnly
+                value={exportCode}
+                rows={4}
+                className="font-mono text-xs bg-background/60 border-cyan/20 resize-none pr-20 select-all"
+                onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+              />
+              <Button
+                data-ocid="rooms_teams.copy_button"
+                size="sm"
+                onClick={handleCopy}
+                className={`absolute top-2 right-2 gap-1.5 text-xs transition-all ${
+                  copied
+                    ? "bg-green-600 text-white"
+                    : "bg-secondary text-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy All
+                  </>
+                )}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-yellow-400">
+                📋 What to share with each team:
+              </p>
+              <ol className="text-xs text-muted-foreground space-y-1 pl-4 list-decimal">
+                <li>
+                  The{" "}
+                  <span className="text-foreground font-medium">Room Key</span>{" "}
+                  (e.g. AUCTION-XXXX)
+                </li>
+                <li>
+                  Their individual{" "}
+                  <span className="text-foreground font-medium">
+                    Team Passkey
+                  </span>{" "}
+                  (e.g. TEAM-XXXX)
+                </li>
+                <li>
+                  This{" "}
+                  <span className="text-cyan font-medium">Export Code</span>{" "}
+                  (paste in Team Login → Import section)
+                </li>
+              </ol>
+              <p className="text-xs text-muted-foreground pt-1">
+                After you approve teams here, re-generate and re-share the
+                export code so their approval status is updated.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1453,8 +1740,8 @@ export default function AdminDashboard() {
               Players
             </TabsTrigger>
             <TabsTrigger value="teams" data-ocid="admin_dashboard.tab">
-              <Trophy className="w-4 h-4 mr-1.5" />
-              ICP Teams
+              <UserCheck className="w-4 h-4 mr-1.5" />
+              Approvals
             </TabsTrigger>
             <TabsTrigger value="auction" data-ocid="admin_dashboard.tab">
               <Gavel className="w-4 h-4 mr-1.5" />
@@ -1462,7 +1749,7 @@ export default function AdminDashboard() {
             </TabsTrigger>
             <TabsTrigger value="approvals" data-ocid="admin_dashboard.tab">
               <UserCheck className="w-4 h-4 mr-1.5" />
-              Approvals
+              ICP Approvals
             </TabsTrigger>
           </TabsList>
 

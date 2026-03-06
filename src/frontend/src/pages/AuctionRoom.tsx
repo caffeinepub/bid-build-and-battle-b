@@ -39,7 +39,11 @@ import AuctionTimer from "../components/AuctionTimer";
 import Modal from "../components/Modal";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
 import type { BidRecord, LocalPlayer } from "../lib/auctionStore";
-import { getAuctionRooms } from "../lib/auctionStore";
+import {
+  getAuctionRooms,
+  resetAllAuctionData,
+  resetAuctionEngineOnly,
+} from "../lib/auctionStore";
 import { getAdminSession } from "../lib/authConstants";
 import { formatCurrency } from "../utils/currencyFormatter";
 import { getCategoryLabel, getRoleLabel } from "../utils/playerHelpers";
@@ -104,6 +108,8 @@ function AuctionStatusHeader({
   onStart,
   onPauseResume,
   onEnd,
+  onNewAuction,
+  onResetEngine,
   isPaused,
   isLive,
   isWaiting,
@@ -119,6 +125,8 @@ function AuctionStatusHeader({
   onStart: () => void;
   onPauseResume: () => void;
   onEnd: () => void;
+  onNewAuction: () => void;
+  onResetEngine: () => void;
   isPaused: boolean;
   isLive: boolean;
   isWaiting: boolean;
@@ -251,9 +259,31 @@ function AuctionStatusHeader({
               </>
             )}
             {isCompleted && (
-              <Badge className="bg-muted text-muted-foreground border-border border text-xs font-medium">
-                ✓ Auction Ended
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-muted text-muted-foreground border-border border text-xs font-medium">
+                  ✓ Auction Ended
+                </Badge>
+                <Button
+                  data-ocid="auction_header.secondary_button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onResetEngine}
+                  className="border-cyan/30 text-cyan hover:bg-cyan/10 gap-1.5 text-xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Re-run (same teams)
+                </Button>
+                <Button
+                  data-ocid="auction_header.delete_button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onNewAuction}
+                  className="border-pink/30 text-pink hover:bg-pink/10 gap-1.5 text-xs"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  New Auction
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -279,7 +309,7 @@ function InitializeAuctionForm({
   const [bidIncrementL, setBidIncrementL] = useState("10");
   const [maxSquad, setMaxSquad] = useState("25");
   const [maxForeign, setMaxForeign] = useState("4");
-  const [timerDuration, setTimerDuration] = useState("15");
+  const [timerDuration, setTimerDuration] = useState("60");
 
   const handleSubmit = () => {
     const increment = Math.round(Number(bidIncrementL) * 100_000);
@@ -367,7 +397,7 @@ function InitializeAuctionForm({
             data-ocid="auction_setup.timer_input"
             type="number"
             min="5"
-            max="60"
+            max="300"
             value={timerDuration}
             onChange={(e) => setTimerDuration(e.target.value)}
             className="h-8 text-sm"
@@ -1070,6 +1100,24 @@ export default function AuctionRoom() {
     }
   };
 
+  // ── New Auction handlers ──────────────────────────────────────────────────
+
+  const handleNewAuction = () => {
+    resetAllAuctionData();
+    toast.success(
+      "All data cleared. You can now create a new auction room, add teams and players.",
+    );
+    navigate({ to: "/admin/dashboard" });
+  };
+
+  const handleResetEngine = () => {
+    resetAuctionEngineOnly();
+    toast.success(
+      "Auction reset. Same teams will run another auction. Go to Auction Room to re-initialize.",
+    );
+    navigate({ to: "/admin/dashboard" });
+  };
+
   const handleNextPlayer = async () => {
     setActionPending(true);
     try {
@@ -1165,6 +1213,8 @@ export default function AuctionRoom() {
           onStart={handleStartExisting}
           onPauseResume={handlePauseResume}
           onEnd={() => setEndModalOpen(true)}
+          onNewAuction={handleNewAuction}
+          onResetEngine={handleResetEngine}
           isPaused={isPaused}
           isLive={isLive}
           isWaiting={isWaiting}

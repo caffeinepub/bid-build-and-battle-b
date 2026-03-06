@@ -16,6 +16,7 @@ export interface TeamRecord {
   budgetRemaining: number; // in rupees
   playersBought: number;
   foreignPlayers: number;
+  approvalStatus: "pending" | "approved" | "rejected"; // admin must approve before team can enter
 }
 
 export interface TeamSession {
@@ -28,6 +29,7 @@ export interface TeamSession {
   budgetRemaining: number;
   playersBought: number;
   foreignPlayers: number;
+  approvalStatus: "pending" | "approved" | "rejected";
   loggedInAt: number;
 }
 
@@ -186,6 +188,28 @@ export function getTeams(): TeamRecord[] {
 
 export function saveTeams(teams: TeamRecord[]): void {
   localStorage.setItem(TEAMS_KEY, JSON.stringify(teams));
+  // Broadcast team approval changes for cross-tab sync
+  try {
+    getBroadcastChannel()?.postMessage({ type: "TEAMS_UPDATE", teams });
+  } catch {
+    // ignore
+  }
+}
+
+export function approveTeamLocal(teamId: string): void {
+  const teams = getTeams();
+  const idx = teams.findIndex((t) => t.teamId === teamId);
+  if (idx === -1) return;
+  teams[idx] = { ...teams[idx], approvalStatus: "approved" };
+  saveTeams(teams);
+}
+
+export function rejectTeamLocal(teamId: string): void {
+  const teams = getTeams();
+  const idx = teams.findIndex((t) => t.teamId === teamId);
+  if (idx === -1) return;
+  teams[idx] = { ...teams[idx], approvalStatus: "rejected" };
+  saveTeams(teams);
 }
 
 export function addTeam(
@@ -205,6 +229,7 @@ export function addTeam(
     budgetRemaining,
     playersBought: 0,
     foreignPlayers: 0,
+    approvalStatus: "pending", // Admin must approve before team can enter
   };
   saveTeams([...existing, newTeam]);
 
@@ -236,6 +261,8 @@ export type TeamLoginErrorCode =
   | "no_data"
   | "wrong_passkey"
   | "wrong_room"
+  | "pending" // credentials valid but awaiting admin approval
+  | "rejected" // admin rejected this team
   | "success";
 
 export interface TeamLoginResult {
@@ -272,6 +299,33 @@ export function validateTeamLogin(
     return { session: null, error: "wrong_room" };
   }
 
+  // Check approval status (backward compat: undefined defaults to "approved" for pre-existing teams)
+  const approvalStatus = team.approvalStatus ?? "approved";
+
+  if (approvalStatus === "rejected") {
+    return { session: null, error: "rejected" };
+  }
+
+  // Build partial session for pending state (team name is needed for the UI)
+  if (approvalStatus === "pending") {
+    return {
+      session: {
+        teamId: team.teamId,
+        teamName: team.teamName,
+        passkey: team.passkey,
+        auctionId: auction.auctionId,
+        auctionName: auction.auctionName,
+        roomKey: auction.roomKey,
+        budgetRemaining: team.budgetRemaining,
+        playersBought: team.playersBought,
+        foreignPlayers: team.foreignPlayers,
+        approvalStatus: "pending",
+        loggedInAt: Date.now(),
+      },
+      error: "pending",
+    };
+  }
+
   // Refresh budget/squad from engine if engine exists
   let budgetRemaining = team.budgetRemaining;
   let playersBought = team.playersBought;
@@ -298,6 +352,7 @@ export function validateTeamLogin(
       budgetRemaining,
       playersBought,
       foreignPlayers,
+      approvalStatus: "approved",
       loggedInAt: Date.now(),
     },
     error: "success",
@@ -336,8 +391,52 @@ export function getAuctionEngine(): AuctionEngine | null {
   }
 }
 
+// BroadcastChannel for same-device cross-tab sync (instant, no 2s poll delay)
+let _broadcastChannel: BroadcastChannel | null = null;
+function getBroadcastChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === "undefined") return null;
+  if (!_broadcastChannel) {
+    _broadcastChannel = new BroadcastChannel("b3_auction_engine");
+  }
+  return _broadcastChannel;
+}
+
 export function saveAuctionEngine(engine: AuctionEngine): void {
   localStorage.setItem(AUCTION_ENGINE_KEY, JSON.stringify(engine));
+  // Broadcast to all tabs on the same device for instant sync
+  try {
+    getBroadcastChannel()?.postMessage({ type: "ENGINE_UPDATE", engine });
+  } catch {
+    // BroadcastChannel not available in all environments
+  }
+}
+
+export function subscribeToEngineUpdates(
+  callback: (engine: AuctionEngine) => void,
+): () => void {
+  const channel = getBroadcastChannel();
+  if (!channel) return () => {};
+  const handler = (event: MessageEvent) => {
+    if (event.data?.type === "ENGINE_UPDATE" && event.data?.engine) {
+      callback(event.data.engine as AuctionEngine);
+    }
+  };
+  channel.addEventListener("message", handler);
+  return () => channel.removeEventListener("message", handler);
+}
+
+export function subscribeToTeamUpdates(
+  callback: (teams: TeamRecord[]) => void,
+): () => void {
+  const channel = getBroadcastChannel();
+  if (!channel) return () => {};
+  const handler = (event: MessageEvent) => {
+    if (event.data?.type === "TEAMS_UPDATE" && event.data?.teams) {
+      callback(event.data.teams as TeamRecord[]);
+    }
+  };
+  channel.addEventListener("message", handler);
+  return () => channel.removeEventListener("message", handler);
 }
 
 export function getDefaultAuctionEngine(): AuctionEngine {
@@ -356,7 +455,7 @@ export function getDefaultAuctionEngine(): AuctionEngine {
     bidIncrement: 1_000_000, // 10 Lakhs
     maxSquadSize: 25,
     maxForeignPlayers: 4,
-    timerDuration: 15,
+    timerDuration: 60,
     bidProcessingLock: false,
     lastUpdated: Date.now(),
   };
@@ -368,7 +467,7 @@ export function initAuctionEngine(
   bidIncrement: number,
   maxSquadSize: number,
   maxForeignPlayers: number,
-  timerDuration = 15,
+  timerDuration = 60,
 ): void {
   const existing = getAuctionEngine();
   const engine: AuctionEngine = {
@@ -751,6 +850,46 @@ export function reAuctionCurrentPlayer(): void {
   engine.lastBidTimestamp = Date.now();
   engine.lastUpdated = Date.now();
   saveAuctionEngine(engine);
+}
+
+// ─── Reset / New Auction ─────────────────────────────────────────────────────
+
+/**
+ * Full reset: wipes the auction engine, all local players, teams, and auction
+ * rooms so the admin can start a brand-new auction from scratch.
+ */
+export function resetAllAuctionData(): void {
+  localStorage.removeItem(AUCTION_ENGINE_KEY);
+  localStorage.removeItem(PLAYERS_KEY);
+  localStorage.removeItem(TEAMS_KEY);
+  localStorage.removeItem(AUCTIONS_KEY);
+  localStorage.removeItem(TEAM_SESSION_KEY);
+}
+
+/**
+ * Soft reset: keeps rooms & teams but wipes the engine state and player
+ * statuses so the same teams can run another auction with fresh players.
+ */
+export function resetAuctionEngineOnly(): void {
+  localStorage.removeItem(AUCTION_ENGINE_KEY);
+  // Reset player statuses to "available"
+  const players = getLocalPlayers();
+  const reset = players.map((p) => ({
+    ...p,
+    status: "available" as LocalPlayerStatus,
+    soldToTeamId: undefined,
+    soldToTeamName: undefined,
+    soldPrice: undefined,
+  }));
+  saveLocalPlayers(reset);
+  // Reset team budgets and squad counts
+  const teams = getTeams();
+  const resetTeams = teams.map((t) => ({
+    ...t,
+    playersBought: 0,
+    foreignPlayers: 0,
+  }));
+  saveTeams(resetTeams);
 }
 
 export function updateLocalPlayer(
