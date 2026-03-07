@@ -86,6 +86,16 @@ export default {
           dim: 'oklch(0.55 0.18 340)',
           bright: 'oklch(0.75 0.24 340)',
         },
+        gold: {
+          DEFAULT: 'oklch(0.82 0.18 85)',
+          dim: 'oklch(0.70 0.14 85)',
+          bright: 'oklch(0.92 0.20 85)',
+        },
+        'cricket-green': {
+          DEFAULT: 'oklch(0.58 0.18 145)',
+          dim: 'oklch(0.45 0.14 145)',
+          bright: 'oklch(0.68 0.20 145)',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -98,6 +108,7 @@ export default {
         xs: '0 1px 2px 0 rgba(0,0,0,0.05)',
         'cyan-glow': '0 0 20px oklch(0.78 0.18 195 / 0.4)',
         'pink-glow': '0 0 20px oklch(0.65 0.22 340 / 0.4)',
+        'gold-glow': '0 0 30px oklch(0.82 0.18 85 / 0.5), 0 0 60px oklch(0.82 0.18 85 / 0.2)',
         'card': '0 4px 24px oklch(0.05 0.01 255 / 0.6)',
       },
       keyframes: {

@@ -97,52 +97,121 @@ export default function WatchPage() {
       <AppHeader />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink/10 border border-pink/20 mb-4">
-            <Radio className="w-4 h-4 text-pink animate-pulse-glow" />
-            <span className="text-sm font-medium text-pink">
-              Live Auction Viewer
-            </span>
+        {/* Cricket Hero Banner */}
+        <div
+          className="relative rounded-2xl overflow-hidden mb-8 px-6 py-6 sm:px-8 sm:py-7"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.11 0.04 255) 0%, oklch(0.14 0.05 225) 50%, oklch(0.13 0.04 255) 100%)",
+            border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+          }}
+        >
+          {/* Subtle field lines */}
+          <div
+            className="absolute inset-0 opacity-[0.04]"
+            aria-hidden
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(0deg, oklch(0.58 0.18 145) 0px, oklch(0.58 0.18 145) 1px, transparent 1px, transparent 40px)",
+            }}
+          />
+          {/* Gold left accent bar */}
+          <div
+            className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
+            style={{ background: "oklch(0.82 0.18 85)" }}
+          />
+
+          <div className="relative flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <img
+                src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+                alt="B³"
+                className="h-14 w-auto object-contain flex-shrink-0"
+                style={{
+                  filter: "drop-shadow(0 0 10px oklch(0.82 0.18 85 / 0.3))",
+                }}
+              />
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  {isLive ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-500/15 border border-red-500/30 text-red-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-live-pulse" />
+                      🔴 LIVE AUCTION
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-muted/50 border border-border text-muted-foreground">
+                      <Radio className="w-3 h-3" />
+                      Live Auction Viewer
+                    </span>
+                  )}
+                </div>
+                <h1
+                  className="text-2xl sm:text-3xl font-bold"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.78 0.18 195))",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  🏏 Bid Build Battle
+                </h1>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Watch the live IPL auction in real time — no login required
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-gold" />
+                <span className="text-gold font-semibold">
+                  {totalPlayers} players
+                </span>
+              </span>
+              {teams.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-cyan" />
+                  <span className="text-cyan font-semibold">
+                    {teams.length} teams
+                  </span>
+                </span>
+              )}
+            </div>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient mb-2">
-            Bid Build Battle
-          </h1>
-          <p className="text-muted-foreground">
-            Watch the live IPL auction in real time — no login required.
-          </p>
         </div>
 
-        {/* Status Banner */}
+        {/* Status Banner — compact secondary row */}
         <div
-          className={`flex items-center justify-between p-4 rounded-xl border mb-6 ${statusConfig.bg}`}
+          className={`flex items-center justify-between px-4 py-2.5 rounded-xl border mb-6 ${statusConfig.bg}`}
         >
-          <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${statusConfig.dot}`} />
-            <span className={`font-semibold ${statusConfig.text}`}>
+          <div className="flex items-center gap-2">
+            <div className={`w-2.5 h-2.5 rounded-full ${statusConfig.dot}`} />
+            <span className={`text-sm font-semibold ${statusConfig.text}`}>
               {statusConfig.label}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Trophy className="w-4 h-4" />
-              {totalPlayers} players
-            </span>
-            {teams.length > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Users className="w-4 h-4" />
-                {teams.length} teams
-              </span>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Powered by Bid Build Battle (B³)
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main: Current Player */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="card-navy rounded-2xl overflow-hidden border border-border shadow-card">
+            <div
+              className={`rounded-2xl overflow-hidden shadow-card transition-all duration-500 ${isLive && currentPlayerData ? "live-player-glow" : "card-navy"}`}
+            >
               {/* Card Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div
+                className="flex items-center justify-between px-6 py-4 border-b"
+                style={{
+                  borderColor:
+                    isLive && currentPlayerData
+                      ? "oklch(0.82 0.18 85 / 0.2)"
+                      : "oklch(var(--border))",
+                }}
+              >
                 <h2 className="font-semibold text-foreground flex items-center gap-2">
                   <Eye className="w-4 h-4 text-cyan" />
                   Current Player on Auction
@@ -194,11 +263,23 @@ export default function WatchPage() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-secondary rounded-xl p-4">
-                          <p className="text-xs text-muted-foreground mb-1">
-                            Base Price
+                        <div
+                          className="rounded-xl p-4"
+                          style={{
+                            background: "oklch(0.58 0.18 145 / 0.08)",
+                            border: "1px solid oklch(0.58 0.18 145 / 0.2)",
+                          }}
+                        >
+                          <p
+                            className="text-xs font-medium mb-1"
+                            style={{ color: "oklch(0.58 0.18 145)" }}
+                          >
+                            🏏 Base Price
                           </p>
-                          <p className="text-lg font-bold text-cyan">
+                          <p
+                            className="text-lg font-bold"
+                            style={{ color: "oklch(0.68 0.20 145)" }}
+                          >
                             {formatCurrency(
                               BigInt(Math.round(currentPlayerData.basePrice)),
                             )}

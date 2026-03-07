@@ -12,6 +12,7 @@ import AppHeader from "./components/AppHeader";
 import LoadingScreen from "./components/LoadingScreen";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+const SplashPage = lazy(() => import("./pages/SplashPage"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AuctionRoom = lazy(() => import("./pages/AuctionRoom"));
@@ -47,10 +48,7 @@ const rootRoute = createRootRoute({ component: RootLayout });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  beforeLoad: () => {
-    throw redirect({ to: "/watch" });
-  },
-  component: () => null,
+  component: () => <SplashPage />,
 });
 
 const watchRoute = createRoute({

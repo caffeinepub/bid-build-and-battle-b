@@ -1225,6 +1225,11 @@ export default function AuctionRoom() {
             </button>
             <div className="w-px h-5 bg-border" aria-hidden="true" />
             <div className="flex items-center gap-2">
+              <img
+                src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+                alt="B³ Logo"
+                className="h-8 w-auto object-contain"
+              />
               <Gavel className="w-4 h-4 text-cyan" />
               <span className="font-bold text-sm tracking-wide text-gradient">
                 AUCTION ROOM

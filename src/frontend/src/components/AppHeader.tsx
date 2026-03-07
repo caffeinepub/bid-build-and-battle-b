@@ -8,7 +8,6 @@ import {
   LogOut,
   Menu,
   Shield,
-  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -92,13 +91,15 @@ export default function AppHeader() {
           {/* Logo */}
           <button
             type="button"
-            onClick={() => void navigate({ to: "/watch" })}
+            onClick={() => void navigate({ to: "/" })}
             className="flex items-center gap-2 group"
+            aria-label="Go to home"
           >
-            <div className="w-8 h-8 rounded-lg gradient-cyan-pink flex items-center justify-center shadow-cyan-glow">
-              <Trophy className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg text-gradient">B³</span>
+            <img
+              src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+              alt="B³ IPL Auction"
+              className="h-9 w-auto object-contain"
+            />
             <span className="hidden sm:block text-xs text-muted-foreground font-medium">
               Bid Build Battle
             </span>

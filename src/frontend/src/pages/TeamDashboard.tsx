@@ -207,13 +207,20 @@ export default function TeamDashboard() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {session?.teamName ?? "Team Dashboard"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Team Owner Dashboard
-            </p>
+          <div className="flex items-center gap-3">
+            <img
+              src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+              alt="B³ Logo"
+              className="h-10 w-auto object-contain"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {session?.teamName ?? "Team Dashboard"}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Team Owner Dashboard
+              </p>
+            </div>
           </div>
           <Button
             variant="ghost"

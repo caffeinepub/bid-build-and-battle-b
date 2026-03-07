@@ -36,6 +36,7 @@ import {
   fetchPlayersFromBackend,
   fetchRoomsFromBackend,
   fetchTeamsFromBackend,
+  syncEngineToBackend,
 } from "../lib/backendSync";
 
 export interface UseAuctionEngineResult {
@@ -402,10 +403,33 @@ export function useAuctionEngine(): UseAuctionEngineResult {
       teamId: string,
       playerCategory: string,
     ): Promise<{ success: boolean; error?: string }> => {
+      // Step 1: Sync latest engine from backend before placing bid.
+      // This ensures we're bidding on the most up-to-date state, even if
+      // another device placed a bid within the last 2s poll window.
+      try {
+        const backendEngine = await fetchEngineFromBackend();
+        if (backendEngine) {
+          const localEngine = getAuctionEngine();
+          if (
+            !localEngine ||
+            backendEngine.lastUpdated > (localEngine.lastUpdated ?? 0)
+          ) {
+            saveAuctionEngine(backendEngine);
+          }
+        }
+      } catch {
+        // Continue with local state if backend unavailable
+      }
+
+      // Step 2: Place the bid against the freshest local engine
       const result = placeBidInEngine(teamId, playerCategory);
       if (result.success) {
         const latest = getAuctionEngine();
         setEngine(latest);
+        // Step 3: Immediately push updated engine to backend (don't wait for 2s poll)
+        if (latest) {
+          syncEngineToBackend(latest);
+        }
       }
       return result;
     },

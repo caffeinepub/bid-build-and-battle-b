@@ -48,12 +48,32 @@ export default function AdminLogin() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md">
-        {/* Logo / Brand */}
+      {/* Background orbs */}
+      <div
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+        aria-hidden
+      >
+        <div
+          className="absolute top-1/4 right-1/4 w-80 h-80 rounded-full opacity-10 blur-3xl"
+          style={{ background: "oklch(0.82 0.18 85)" }}
+        />
+        <div
+          className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full opacity-10 blur-3xl"
+          style={{ background: "oklch(0.78 0.18 195)" }}
+        />
+      </div>
+
+      <div className="relative w-full max-w-md">
+        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 border border-primary/20">
-            <Shield className="w-8 h-8 text-primary" />
-          </div>
+          <img
+            src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+            alt="IPL Auction — Bid Build Battle"
+            className="w-44 sm:w-52 h-auto object-contain mb-4 animate-splash-in"
+            style={{
+              filter: "drop-shadow(0 0 16px oklch(0.82 0.18 85 / 0.3))",
+            }}
+          />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Admin Portal
           </h1>
@@ -62,7 +82,15 @@ export default function AdminLogin() {
           </p>
         </div>
 
-        <Card className="border-border/50 shadow-lg">
+        <Card
+          className="shadow-lg"
+          style={{
+            border: "1px solid oklch(0.82 0.18 85 / 0.25)",
+            background: "oklch(0.16 0.03 255)",
+            boxShadow:
+              "0 0 40px oklch(0.82 0.18 85 / 0.08), 0 8px 32px oklch(0.05 0.01 255 / 0.5)",
+          }}
+        >
           <CardHeader className="pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
               <Lock className="w-4 h-4 text-primary" />

@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -46,6 +44,10 @@
     --navy-deep: 0.1 0.025 255;
     --navy-mid: 0.14 0.03 255;
     --navy-light: 0.2 0.04 255;
+
+    /* Cricket-themed tokens */
+    --gold: 0.82 0.18 85;
+    --cricket-green: 0.58 0.18 145;
   }
 
   * {
@@ -55,13 +57,18 @@
   body {
     @apply bg-background text-foreground font-poppins;
     background-image: radial-gradient(
-        ellipse at 20% 50%,
-        oklch(0.18 0.06 255 / 0.3) 0%,
+        ellipse at 15% 40%,
+        oklch(0.18 0.06 255 / 0.4) 0%,
         transparent 60%
       ),
       radial-gradient(
-        ellipse at 80% 20%,
-        oklch(0.18 0.06 340 / 0.15) 0%,
+        ellipse at 85% 20%,
+        oklch(0.18 0.06 85 / 0.12) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at 50% 80%,
+        oklch(0.12 0.06 145 / 0.08) 0%,
         transparent 50%
       );
     min-height: 100vh;
@@ -79,17 +86,29 @@
   .text-pink {
     color: oklch(var(--pink));
   }
+  .text-gold {
+    color: oklch(var(--gold));
+  }
+  .text-cricket-green {
+    color: oklch(var(--cricket-green));
+  }
   .bg-cyan {
     background-color: oklch(var(--cyan));
   }
   .bg-pink {
     background-color: oklch(var(--pink));
   }
+  .bg-gold {
+    background-color: oklch(var(--gold));
+  }
   .border-cyan {
     border-color: oklch(var(--cyan));
   }
   .border-pink {
     border-color: oklch(var(--pink));
+  }
+  .border-gold {
+    border-color: oklch(var(--gold));
   }
   .glow-cyan {
     box-shadow: 0 0 20px oklch(var(--cyan) / 0.4), 0 0 40px
@@ -99,11 +118,24 @@
     box-shadow: 0 0 20px oklch(var(--pink) / 0.4), 0 0 40px
       oklch(var(--pink) / 0.2);
   }
+  .glow-gold {
+    box-shadow: 0 0 20px oklch(var(--gold) / 0.5), 0 0 40px
+      oklch(var(--gold) / 0.25), 0 0 60px oklch(var(--gold) / 0.1);
+  }
   .gradient-cyan-pink {
     background: linear-gradient(135deg, oklch(var(--cyan)), oklch(var(--pink)));
   }
+  .gradient-gold-cyan {
+    background: linear-gradient(135deg, oklch(var(--gold)), oklch(var(--cyan)));
+  }
   .text-gradient {
     background: linear-gradient(135deg, oklch(var(--cyan)), oklch(var(--pink)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .text-gradient-gold {
+    background: linear-gradient(135deg, oklch(var(--gold)), oklch(0.92 0.12 85));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -117,6 +149,66 @@
     backdrop-filter: blur(12px);
     border-bottom: 1px solid oklch(var(--border));
   }
+  .card-gold-border {
+    border: 1px solid oklch(var(--gold) / 0.4);
+    box-shadow: 0 0 20px oklch(var(--gold) / 0.15), inset 0 0 20px
+      oklch(var(--gold) / 0.03);
+  }
+  .live-player-glow {
+    border: 2px solid oklch(var(--gold) / 0.6);
+    box-shadow: 0 0 30px oklch(var(--gold) / 0.2), 0 0 60px
+      oklch(var(--gold) / 0.1), 0 8px 32px oklch(0.05 0.01 255 / 0.5);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes splash-fade-in-up {
+  from {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.6 0.22 25 / 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 8px oklch(0.6 0.22 25 / 0);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+.animate-splash-in {
+  animation: splash-fade-in-up 0.6s ease-out both;
+}
+.animate-live-pulse {
+  animation: live-pulse 2s ease-in-out infinite;
 }
 
 @keyframes bid-flash {
