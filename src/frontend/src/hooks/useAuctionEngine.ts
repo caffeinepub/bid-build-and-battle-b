@@ -16,6 +16,7 @@ import {
   activateNextPlayer,
   endAuctionEngine,
   getAuctionEngine,
+  getAuctionRooms,
   getLocalPlayers,
   getTeams,
   getTimerSecondsRemaining,
@@ -26,7 +27,9 @@ import {
   resolveCurrentPlayer,
   resumeAuctionEngine,
   saveAuctionEngine,
+  saveAuctionRooms,
   saveLocalPlayers,
+  saveTeams,
   skipCurrentPlayer,
   startAuctionEngine,
   subscribeToEngineUpdates,
@@ -123,10 +126,35 @@ export function useAuctionEngine(): UseAuctionEngineResult {
 
       // 1. Try fetching from backend — if it has a newer engine, use it
       try {
-        const [backendEngine, backendPlayers] = await Promise.all([
-          fetchEngineFromBackend(),
-          fetchPlayersFromBackend(),
-        ]);
+        const [backendEngine, backendPlayers, backendTeams, backendRooms] =
+          await Promise.all([
+            fetchEngineFromBackend(),
+            fetchPlayersFromBackend(),
+            fetchTeamsFromBackend(),
+            fetchRoomsFromBackend(),
+          ]);
+
+        // Always sync teams and rooms from backend so all devices see the same data
+        if (backendTeams && backendTeams.length > 0) {
+          const localTeams = getTeams();
+          // Merge: backend wins for approval status; local data preserved otherwise
+          const mergedTeams = backendTeams.map((bt) => {
+            const lt = localTeams.find((t) => t.teamId === bt.teamId);
+            return lt ? { ...lt, approvalStatus: bt.approvalStatus } : bt;
+          });
+          // Add any local teams not yet on backend
+          const backendIds = new Set(backendTeams.map((t) => t.teamId));
+          for (const lt of localTeams) {
+            if (!backendIds.has(lt.teamId)) mergedTeams.push(lt);
+          }
+          saveTeams(mergedTeams);
+        }
+        if (backendRooms && backendRooms.length > 0) {
+          const localRooms = getAuctionRooms();
+          if (localRooms.length === 0) {
+            saveAuctionRooms(backendRooms);
+          }
+        }
 
         const localEngine = getAuctionEngine();
 
@@ -136,6 +164,26 @@ export function useAuctionEngine(): UseAuctionEngineResult {
             backendEngine.lastUpdated > (localEngine.lastUpdated ?? 0))
         ) {
           // Backend has newer state — write to localStorage and update React state
+          // Also ensure all known teams are in the engine's teams list
+          const allTeams = getTeams();
+          const engineTeamIds = new Set(
+            backendEngine.teams.map((t) => t.teamId),
+          );
+          for (const t of allTeams) {
+            if (
+              !engineTeamIds.has(t.teamId) &&
+              t.approvalStatus === "approved"
+            ) {
+              backendEngine.teams.push({
+                teamId: t.teamId,
+                teamName: t.teamName,
+                budgetRemaining: t.budgetRemaining,
+                playersBought: t.playersBought,
+                foreignPlayers: t.foreignPlayers,
+                squad: [],
+              });
+            }
+          }
           saveAuctionEngine(backendEngine);
           setEngine(backendEngine);
           setTimerSeconds(getTimerSecondsRemaining(backendEngine));

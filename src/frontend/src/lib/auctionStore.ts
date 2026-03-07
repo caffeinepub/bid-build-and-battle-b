@@ -301,16 +301,18 @@ export function validateTeamLogin(
   const normalizedPasskey = passkey.trim().toUpperCase();
   const normalizedRoomKey = roomKey.trim().toUpperCase();
 
-  // No data at all in this browser
-  if (teams.length === 0 && auctions.length === 0) {
-    return { session: null, error: "no_data" };
-  }
-
+  // Find team by passkey first — this is the primary credential
   const team = teams.find((t) => t.passkey === normalizedPasskey);
+
   if (!team) {
+    // If we have absolutely no data, give the more helpful no_data error
+    if (teams.length === 0 && auctions.length === 0) {
+      return { session: null, error: "no_data" };
+    }
     return { session: null, error: "wrong_passkey" };
   }
 
+  // Passkey is valid — now check room key (case insensitive) against team's auction
   const auction = auctions.find(
     (a) =>
       a.roomKey.toUpperCase() === normalizedRoomKey &&
@@ -590,6 +592,12 @@ export function endAuctionEngine(): void {
   saveAuctionEngine(engine);
 }
 
+// In-memory bid lock — NOT persisted to localStorage/backend.
+// This prevents the lock from permanently blocking teams across devices.
+let _bidLock = false;
+let _bidLockTimestamp = 0;
+const BID_LOCK_TIMEOUT_MS = 3000; // Auto-release after 3s if never cleared
+
 export function placeBidInEngine(
   teamId: string,
   playerCategory: string,
@@ -598,9 +606,13 @@ export function placeBidInEngine(
   if (!engine)
     return { success: false, error: "Auction engine not initialized" };
 
-  // Race condition protection
-  if (engine.bidProcessingLock) {
-    return { success: false, error: "Another bid is being processed" };
+  // In-memory race-condition lock (auto-expires after 3s to prevent permanent stall)
+  const now = Date.now();
+  if (_bidLock && now - _bidLockTimestamp < BID_LOCK_TIMEOUT_MS) {
+    return {
+      success: false,
+      error: "Another bid is being processed. Try again in a moment.",
+    };
   }
 
   if (engine.status !== "live") {
@@ -617,13 +629,29 @@ export function placeBidInEngine(
     return { success: false, error: "No player is currently on auction" };
   }
 
-  // Find team
-  const team = engine.teams.find((t) => t.teamId === teamId);
+  // Find team — also check teams from localStorage in case engine.teams is stale
+  let team = engine.teams.find((t) => t.teamId === teamId);
   if (!team) {
-    return {
-      success: false,
-      error: "Your team is not registered in this auction",
-    };
+    // Try to find from saved teams and inject into engine
+    const savedTeams = getTeams();
+    const savedTeam = savedTeams.find((t) => t.teamId === teamId);
+    if (savedTeam) {
+      const engineTeam: AuctionEngineTeam = {
+        teamId: savedTeam.teamId,
+        teamName: savedTeam.teamName,
+        budgetRemaining: savedTeam.budgetRemaining,
+        playersBought: savedTeam.playersBought,
+        foreignPlayers: savedTeam.foreignPlayers,
+        squad: [],
+      };
+      engine.teams.push(engineTeam);
+      team = engineTeam;
+    } else {
+      return {
+        success: false,
+        error: "Your team is not registered in this auction",
+      };
+    }
   }
 
   const nextBid = engine.currentBid + engine.bidIncrement;
@@ -654,8 +682,9 @@ export function placeBidInEngine(
     };
   }
 
-  // Lock and process bid
-  engine.bidProcessingLock = true;
+  // Acquire in-memory lock
+  _bidLock = true;
+  _bidLockTimestamp = Date.now();
 
   // Get player name from most recent bid history, fall back to "Current Player"
   const playerName =
@@ -675,10 +704,14 @@ export function placeBidInEngine(
   engine.highestBidTeamName = team.teamName;
   engine.lastBidTimestamp = Date.now();
   engine.bidHistory = [bidRecord, ...engine.bidHistory].slice(0, 20);
+  // Clear persistent lock field if it was set (backward compat)
   engine.bidProcessingLock = false;
   engine.lastUpdated = Date.now();
 
   saveAuctionEngine(engine);
+
+  // Release in-memory lock immediately after save
+  _bidLock = false;
 
   console.log(
     `[B³ Engine] newBidPlaced — ${team.teamName} bid ₹${(nextBid / 100_000).toFixed(0)}L`,

@@ -44,12 +44,12 @@ const ERROR_CONFIG: Record<
   { title: string; body: string }
 > = {
   no_data: {
-    title: "Auction not found",
-    body: "We couldn't find this auction room. Ask your host to share a fresh Room Key, or use the 'Need help?' section below to import credentials.",
+    title: "Auction data not found",
+    body: "We couldn't find any auction data. Your host needs to share the Room Key and Team Passkey. If the admin is using a different device, ask them to click 'Export Credentials' in their dashboard and share the code with you.",
   },
   wrong_passkey: {
-    title: "Passkey not recognised",
-    body: "That passkey didn't match any team in this room. Double-check it's exactly as given — format is TEAM-XXXX. Your host can re-share your passkey if needed.",
+    title: "Team not found",
+    body: "That passkey doesn't match any team in this room. Make sure you're using the exact passkey your host gave you (format: TEAM-XXXX). If you're on a new device, use 'Having trouble?' below to import credentials.",
   },
   wrong_room: {
     title: "Wrong room key",
@@ -289,7 +289,8 @@ export default function TeamLogin() {
 
     try {
       const backendTeams = await fetchTeamsFromBackend();
-      if (backendTeams && backendTeams.length > 0) {
+      // Save unconditionally (not null) — overwrite stale local data
+      if (backendTeams !== null) {
         saveTeams(backendTeams);
         teams = backendTeams;
         team = backendTeams.find((t) => t.passkey === pendingSession.passkey);
@@ -356,17 +357,19 @@ export default function TeamLogin() {
     setIsLoading(true);
     setBgFetching(true);
 
-    // Always fetch from backend first — ensures cross-device login works
+    // Always fetch from backend first — ensures cross-device login works.
+    // Save unconditionally (overwrite stale localStorage) whenever the value
+    // is not null. An empty array [] is valid and should still overwrite local data.
     try {
       const [backendTeams, backendRooms] = await Promise.all([
         fetchTeamsFromBackend(),
         fetchRoomsFromBackend(),
       ]);
 
-      if (backendTeams && backendTeams.length > 0) {
+      if (backendTeams !== null) {
         saveTeams(backendTeams);
       }
-      if (backendRooms && backendRooms.length > 0) {
+      if (backendRooms !== null) {
         saveAuctionRooms(backendRooms);
       }
     } catch {
@@ -375,7 +378,10 @@ export default function TeamLogin() {
       setBgFetching(false);
     }
 
-    const result = validateTeamLogin(passkey, roomKey);
+    const result = validateTeamLogin(
+      passkey.trim().toUpperCase(),
+      roomKey.trim().toUpperCase(),
+    );
 
     if (result.error === "pending" && result.session) {
       setPendingSession(result.session);
@@ -542,6 +548,20 @@ export default function TeamLogin() {
                 <span className="text-xs opacity-90 leading-relaxed">
                   {errorCfg.body}
                 </span>
+                {(errorCode === "wrong_passkey" ||
+                  errorCode === "wrong_room") && (
+                  <span className="block text-xs opacity-75 mt-1.5">
+                    First time on this device? Tap{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:opacity-100"
+                      onClick={() => setHelpOpen(true)}
+                    >
+                      'Having trouble?'
+                    </button>{" "}
+                    below to import credentials from your host.
+                  </span>
+                )}
               </AlertDescription>
             </Alert>
           )}

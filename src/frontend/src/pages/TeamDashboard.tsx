@@ -19,7 +19,18 @@ import BidHighlight from "../components/BidHighlight";
 import ConfirmModal from "../components/ConfirmModal";
 import SkeletonLoader from "../components/SkeletonLoader";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
-import { clearTeamSession, getTeamSession } from "../lib/auctionStore";
+import {
+  clearTeamSession,
+  getAuctionEngine,
+  getTeamSession,
+  getTeams,
+  saveAuctionEngine,
+  saveTeams,
+} from "../lib/auctionStore";
+import {
+  fetchEngineFromBackend,
+  fetchTeamsFromBackend,
+} from "../lib/backendSync";
 import {
   formatCurrency,
   getCategoryBadgeColor,
@@ -58,15 +69,86 @@ export default function TeamDashboard() {
     }
   }, [engine?.currentPlayerId]);
 
+  // On mount: ensure this device has the latest teams/engine from backend
+  // This guarantees cross-device team recognition even on first load
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only sync
+  useEffect(() => {
+    const sessionTeamId = session?.teamId ?? null;
+    const syncOnMount = async () => {
+      try {
+        const [backendTeams, backendEngine] = await Promise.all([
+          fetchTeamsFromBackend(),
+          fetchEngineFromBackend(),
+        ]);
+        if (backendTeams && backendTeams.length > 0) {
+          const localTeams = getTeams();
+          const mergedTeams = backendTeams.map((bt) => {
+            const lt = localTeams.find((t) => t.teamId === bt.teamId);
+            return lt ? { ...lt, approvalStatus: bt.approvalStatus } : bt;
+          });
+          saveTeams(mergedTeams);
+        }
+        if (backendEngine && sessionTeamId) {
+          const localEngine = getAuctionEngine();
+          const engineToUse =
+            backendEngine.lastUpdated > (localEngine?.lastUpdated ?? 0)
+              ? backendEngine
+              : localEngine;
+          if (engineToUse) {
+            const hasTeam = engineToUse.teams.some(
+              (t) => t.teamId === sessionTeamId,
+            );
+            if (!hasTeam) {
+              const allTeams = getTeams();
+              const myTeam = allTeams.find((t) => t.teamId === sessionTeamId);
+              if (myTeam) {
+                engineToUse.teams.push({
+                  teamId: myTeam.teamId,
+                  teamName: myTeam.teamName,
+                  budgetRemaining: myTeam.budgetRemaining,
+                  playersBought: myTeam.playersBought,
+                  foreignPlayers: myTeam.foreignPlayers,
+                  squad: [],
+                });
+                saveAuctionEngine(engineToUse);
+              }
+            }
+          }
+        }
+      } catch {
+        // Backend unavailable — silently fall back to local state
+      }
+    };
+    void syncOnMount();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleLogout = () => {
     clearTeamSession();
     void navigate({ to: "/team/login" });
   };
 
-  // Get my team from engine
+  // Get my team from engine — also fall back to saved teams list
   const myEngineTeam = session
     ? (engine?.teams.find((t) => t.teamId === session.teamId) ?? null)
     : null;
+
+  // Fallback team record from localStorage when not yet in engine
+  const myLocalTeam = session
+    ? (getTeams().find((t) => t.teamId === session.teamId) ?? null)
+    : null;
+
+  // Effective team data: engine wins (live budget), fall back to local record, then session
+  const effectiveBudget =
+    myEngineTeam?.budgetRemaining ??
+    myLocalTeam?.budgetRemaining ??
+    session?.budgetRemaining ??
+    100_000_000;
+
+  const effectivePlayersBought =
+    myEngineTeam?.playersBought ?? myLocalTeam?.playersBought ?? 0;
+
+  const effectiveForeignPlayers =
+    myEngineTeam?.foreignPlayers ?? myLocalTeam?.foreignPlayers ?? 0;
 
   // Budget values from engine (fallback to session)
   const totalBudget = myEngineTeam
@@ -78,11 +160,7 @@ export default function TeamDashboard() {
       ? session.budgetRemaining
       : 100_000_000;
 
-  const remainingBudget = myEngineTeam
-    ? myEngineTeam.budgetRemaining
-    : session
-      ? session.budgetRemaining
-      : 100_000_000;
+  const remainingBudget = effectiveBudget;
 
   const budgetPercent =
     totalBudget > 0
@@ -100,35 +178,29 @@ export default function TeamDashboard() {
   // Player category for foreign player validation
   const playerCategory = currentPlayerData?.category ?? null;
 
-  // Validate if team can bid
+  // Validate if team can bid — uses effective values so teams NOT YET in engine can still bid
   const canBidResult = (() => {
     if (!isLive) return { canBid: false, reason: "Auction is not live" };
     if (!engine?.currentPlayerId)
       return { canBid: false, reason: "No player on auction" };
     if (!session) return { canBid: false, reason: "Not logged in" };
 
-    if (!myEngineTeam) {
-      return {
-        canBid: false,
-        reason: "Waiting for admin to start the auction",
-      };
-    }
-
-    if (myEngineTeam.budgetRemaining < nextBidAmount) {
+    // Team doesn't need to be in engine already — placeBid handles dynamic injection
+    if (effectiveBudget < nextBidAmount) {
       return {
         canBid: false,
         reason: `Insufficient budget (need ₹${(nextBidAmount / 100_000).toFixed(0)}L)`,
       };
     }
 
-    if (myEngineTeam.playersBought >= (engine?.maxSquadSize ?? 25)) {
+    if (effectivePlayersBought >= (engine?.maxSquadSize ?? 25)) {
       return { canBid: false, reason: "Squad is full" };
     }
 
     const isOverseas = playerCategory === "foreign";
     if (
       isOverseas &&
-      myEngineTeam.foreignPlayers >= (engine?.maxForeignPlayers ?? 4)
+      effectiveForeignPlayers >= (engine?.maxForeignPlayers ?? 4)
     ) {
       return {
         canBid: false,
@@ -241,7 +313,7 @@ export default function TeamDashboard() {
           <span className="text-sm font-medium text-foreground">
             {statusLabel}
           </span>
-          {isWaiting && !myEngineTeam && (
+          {isWaiting && (
             <span className="text-xs text-muted-foreground ml-auto">
               Waiting for admin to initialize auction
             </span>
@@ -484,12 +556,10 @@ export default function TeamDashboard() {
                     </span>
                   </div>
                 )}
-                {myEngineTeam && (
-                  <p className="text-xs text-muted-foreground">
-                    {myEngineTeam.playersBought} players bought ·{" "}
-                    {myEngineTeam.foreignPlayers} foreign
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  {effectivePlayersBought} players bought ·{" "}
+                  {effectiveForeignPlayers} foreign
+                </p>
               </div>
             </div>
 
