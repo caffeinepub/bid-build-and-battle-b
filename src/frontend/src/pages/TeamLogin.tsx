@@ -23,10 +23,16 @@ import {
   type TeamLoginErrorCode,
   type TeamSession,
   getTeams,
+  saveAuctionRooms,
   saveTeamSession,
+  saveTeams,
   subscribeToTeamUpdates,
   validateTeamLogin,
 } from "../lib/auctionStore";
+import {
+  fetchRoomsFromBackend,
+  fetchTeamsFromBackend,
+} from "../lib/backendSync";
 import { importCredentials } from "../lib/sessionExport";
 
 // ─── Error messages for each error code ───────────────────────────────────────
@@ -201,6 +207,8 @@ export default function TeamLogin() {
     | null
   >(null);
   const [isImporting, setIsImporting] = useState(false);
+  // Background fetch state — shown while pulling data from backend
+  const [bgFetching, setBgFetching] = useState(false);
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -210,12 +218,25 @@ export default function TeamLogin() {
     if (pendingSession || isRejected) return;
   }, [pendingSession, isRejected]);
 
-  // Auto-poll for approval status when pending
-  const checkApprovalStatus = useCallback(() => {
+  // Auto-poll for approval status when pending (also checks backend)
+  const checkApprovalStatus = useCallback(async () => {
     if (!pendingSession) return;
 
-    const teams = getTeams();
-    const team = teams.find((t) => t.passkey === pendingSession.passkey);
+    // Always fetch from backend first — admin approved from a different device
+    let teams = getTeams();
+    let team = teams.find((t) => t.passkey === pendingSession.passkey);
+
+    try {
+      const backendTeams = await fetchTeamsFromBackend();
+      if (backendTeams && backendTeams.length > 0) {
+        saveTeams(backendTeams);
+        teams = backendTeams;
+        team = backendTeams.find((t) => t.passkey === pendingSession.passkey);
+      }
+    } catch {
+      // Backend unavailable — fall back to local data
+    }
+
     if (!team) return;
 
     const status = team.approvalStatus ?? "pending";
@@ -246,11 +267,13 @@ export default function TeamLogin() {
     }
 
     // Poll every 5 seconds
-    pollIntervalRef.current = setInterval(checkApprovalStatus, 5000);
+    pollIntervalRef.current = setInterval(() => {
+      void checkApprovalStatus();
+    }, 5000);
 
     // Also subscribe to BroadcastChannel for instant same-device updates
     const unsubscribe = subscribeToTeamUpdates(() => {
-      checkApprovalStatus();
+      void checkApprovalStatus();
     });
 
     return () => {
@@ -276,7 +299,40 @@ export default function TeamLogin() {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 350));
 
-    const result = validateTeamLogin(passkey, roomKey);
+    let result = validateTeamLogin(passkey, roomKey);
+
+    // If local validation failed for ANY reason, always try backend first.
+    // This handles: different device (no_data), stale local data (wrong_passkey/wrong_room),
+    // or admin approved on a different device (pending→approved transition).
+    if (result.error !== "success") {
+      setBgFetching(true);
+      try {
+        const [backendTeams, backendRooms] = await Promise.all([
+          fetchTeamsFromBackend(),
+          fetchRoomsFromBackend(),
+        ]);
+
+        // Merge backend data into localStorage — always overwrite with backend truth
+        if (backendTeams && backendTeams.length > 0) {
+          saveTeams(backendTeams);
+        }
+        if (backendRooms && backendRooms.length > 0) {
+          saveAuctionRooms(backendRooms);
+        }
+
+        // Retry validation with freshly merged data
+        if (
+          (backendTeams && backendTeams.length > 0) ||
+          (backendRooms && backendRooms.length > 0)
+        ) {
+          result = validateTeamLogin(passkey, roomKey);
+        }
+      } catch {
+        // Backend unavailable — fall through to show original error
+      } finally {
+        setBgFetching(false);
+      }
+    }
 
     if (result.error === "pending" && result.session) {
       // Show pending screen — keep credentials in view
@@ -334,7 +390,7 @@ export default function TeamLogin() {
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await new Promise((r) => setTimeout(r, 500));
-    checkApprovalStatus();
+    await checkApprovalStatus();
     setIsRefreshing(false);
   };
 
@@ -598,7 +654,9 @@ export default function TeamLogin() {
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Verifying...
+                  {bgFetching
+                    ? "Connecting to auction server..."
+                    : "Verifying..."}
                 </span>
               ) : (
                 <span className="flex items-center gap-2">

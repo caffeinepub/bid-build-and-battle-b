@@ -117,6 +117,10 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getPlayer' : ActorMethod<[bigint], Player>,
   'getPlayers' : ActorMethod<[], Array<[bigint, Player]>>,
+  'getSharedAuctionState' : ActorMethod<[], string>,
+  'getSharedPlayersData' : ActorMethod<[], string>,
+  'getSharedRoomsData' : ActorMethod<[], string>,
+  'getSharedTeamsData' : ActorMethod<[], string>,
   'getTeam' : ActorMethod<[string], Team>,
   'getTeams' : ActorMethod<[], Array<Team>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
@@ -130,6 +134,22 @@ export interface _SERVICE {
   'rejectTeam' : ActorMethod<[string], undefined>,
   'requestApproval' : ActorMethod<[], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  /**
+   * / Stores the complete auction state for cross-device sync.
+   */
+  'saveSharedAuctionState' : ActorMethod<[string], undefined>,
+  /**
+   * / Stores the players data for the full auction state.
+   */
+  'saveSharedPlayersData' : ActorMethod<[string], undefined>,
+  /**
+   * / Stores the rooms data for the full auction state.
+   */
+  'saveSharedRoomsData' : ActorMethod<[string], undefined>,
+  /**
+   * / Stores the teams data for the full auction state.
+   */
+  'saveSharedTeamsData' : ActorMethod<[string], undefined>,
   'setApproval' : ActorMethod<[Principal, ApprovalStatus], undefined>,
   'updateAuctionState' : ActorMethod<[AuctionStatus], undefined>,
   'updateCurrentPlayer' : ActorMethod<[bigint], undefined>,

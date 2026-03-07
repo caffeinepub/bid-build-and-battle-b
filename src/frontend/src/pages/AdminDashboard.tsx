@@ -49,7 +49,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type React from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useListApprovals, useSetApproval } from "../hooks/useQueries";
 // Note: useActor is not needed here — admin approval now uses localStorage
@@ -76,6 +76,15 @@ import {
   updateLocalPlayer,
 } from "../lib/auctionStore";
 import { clearAdminSession } from "../lib/authConstants";
+// Import backendSync to activate self-registration side-effect, then use sync fns
+import "../lib/backendSync";
+import {
+  clearAllBackendData,
+  syncEngineToBackend,
+  syncPlayersToBackend,
+  syncRoomsToBackend,
+  syncTeamsToBackend,
+} from "../lib/backendSync";
 import { exportCredentials } from "../lib/sessionExport";
 
 // ─── Add Player Form ──────────────────────────────────────────────────────────
@@ -1010,11 +1019,14 @@ function AuctionTab() {
 
   const isCompleted = engine?.status === "completed";
 
-  const handleNewAuction = () => {
+  const handleNewAuction = async () => {
+    // Wipe localStorage immediately
     resetAllAuctionData();
     setEngine(null);
+    // Also clear the backend canister so other devices see the wipe
+    await clearAllBackendData();
     toast.success(
-      "All data cleared. Create a new auction room, add teams and players, then go to the Auction Room.",
+      "All data wiped. Create a new auction room, add teams and players to start fresh.",
     );
   };
 
@@ -1069,16 +1081,44 @@ function AuctionTab() {
                   Wipes everything — all teams, players, rooms, and engine
                   state. A completely fresh start.
                 </p>
-                <Button
-                  data-ocid="auction_tab.delete_button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleNewAuction}
-                  className="border-pink/30 text-pink hover:bg-pink/10 gap-1.5 w-full"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New Auction
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      data-ocid="auction_tab.delete_button"
+                      size="sm"
+                      variant="outline"
+                      className="border-pink/30 text-pink hover:bg-pink/10 gap-1.5 w-full"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      New Auction
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Start a New Auction?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete{" "}
+                        <strong>
+                          all rooms, teams, players, and bid history
+                        </strong>
+                        . Every device will see a completely fresh start. This
+                        action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-ocid="new_auction.cancel_button">
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        data-ocid="new_auction.confirm_button"
+                        onClick={() => void handleNewAuction()}
+                        className="bg-pink hover:bg-pink/80 text-white"
+                      >
+                        Yes, Wipe Everything
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </CardContent>
@@ -1675,6 +1715,19 @@ export default function AdminDashboard() {
   const queryClient = useQueryClient();
 
   const goToAuctionRoom = () => navigate({ to: "/admin/auction-room" });
+
+  // On mount: push any existing localStorage data to backend so other devices can sync
+  useEffect(() => {
+    const engine = getAuctionEngine();
+    const players = getLocalPlayers();
+    const teams = getTeams();
+    const rooms = getAuctionRooms();
+
+    if (engine) syncEngineToBackend(engine);
+    if (players.length > 0) syncPlayersToBackend(players);
+    if (teams.length > 0) syncTeamsToBackend(teams);
+    if (rooms.length > 0) syncRoomsToBackend(rooms);
+  }, []);
 
   const handleLogout = () => {
     clearAdminSession();

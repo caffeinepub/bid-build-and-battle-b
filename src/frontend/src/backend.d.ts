@@ -86,6 +86,10 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getPlayer(id: bigint): Promise<Player>;
     getPlayers(): Promise<Array<[bigint, Player]>>;
+    getSharedAuctionState(): Promise<string>;
+    getSharedPlayersData(): Promise<string>;
+    getSharedRoomsData(): Promise<string>;
+    getSharedTeamsData(): Promise<string>;
     getTeam(name: string): Promise<Team>;
     getTeams(): Promise<Array<Team>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
@@ -99,6 +103,22 @@ export interface backendInterface {
     rejectTeam(name: string): Promise<void>;
     requestApproval(): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    /**
+     * / Stores the complete auction state for cross-device sync.
+     */
+    saveSharedAuctionState(stateJson: string): Promise<void>;
+    /**
+     * / Stores the players data for the full auction state.
+     */
+    saveSharedPlayersData(playersJson: string): Promise<void>;
+    /**
+     * / Stores the rooms data for the full auction state.
+     */
+    saveSharedRoomsData(roomsJson: string): Promise<void>;
+    /**
+     * / Stores the teams data for the full auction state.
+     */
+    saveSharedTeamsData(teamsJson: string): Promise<void>;
     setApproval(user: Principal, status: ApprovalStatus): Promise<void>;
     updateAuctionState(state: AuctionStatus): Promise<void>;
     updateCurrentPlayer(playerId: bigint): Promise<void>;

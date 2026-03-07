@@ -179,6 +179,10 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getPlayer(id: bigint): Promise<Player>;
     getPlayers(): Promise<Array<[bigint, Player]>>;
+    getSharedAuctionState(): Promise<string>;
+    getSharedPlayersData(): Promise<string>;
+    getSharedRoomsData(): Promise<string>;
+    getSharedTeamsData(): Promise<string>;
     getTeam(name: string): Promise<Team>;
     getTeams(): Promise<Array<Team>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
@@ -192,6 +196,22 @@ export interface backendInterface {
     rejectTeam(name: string): Promise<void>;
     requestApproval(): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    /**
+     * / Stores the complete auction state for cross-device sync.
+     */
+    saveSharedAuctionState(stateJson: string): Promise<void>;
+    /**
+     * / Stores the players data for the full auction state.
+     */
+    saveSharedPlayersData(playersJson: string): Promise<void>;
+    /**
+     * / Stores the rooms data for the full auction state.
+     */
+    saveSharedRoomsData(roomsJson: string): Promise<void>;
+    /**
+     * / Stores the teams data for the full auction state.
+     */
+    saveSharedTeamsData(teamsJson: string): Promise<void>;
     setApproval(user: Principal, status: ApprovalStatus): Promise<void>;
     updateAuctionState(state: AuctionStatus): Promise<void>;
     updateCurrentPlayer(playerId: bigint): Promise<void>;
@@ -494,6 +514,62 @@ export class Backend implements backendInterface {
             return from_candid_vec_n36(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getSharedAuctionState(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSharedAuctionState();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSharedAuctionState();
+            return result;
+        }
+    }
+    async getSharedPlayersData(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSharedPlayersData();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSharedPlayersData();
+            return result;
+        }
+    }
+    async getSharedRoomsData(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSharedRoomsData();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSharedRoomsData();
+            return result;
+        }
+    }
+    async getSharedTeamsData(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSharedTeamsData();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSharedTeamsData();
+            return result;
+        }
+    }
     async getTeam(arg0: string): Promise<Team> {
         if (this.processError) {
             try {
@@ -673,6 +749,62 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.saveCallerUserProfile(arg0);
+            return result;
+        }
+    }
+    async saveSharedAuctionState(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.saveSharedAuctionState(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.saveSharedAuctionState(arg0);
+            return result;
+        }
+    }
+    async saveSharedPlayersData(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.saveSharedPlayersData(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.saveSharedPlayersData(arg0);
+            return result;
+        }
+    }
+    async saveSharedRoomsData(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.saveSharedRoomsData(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.saveSharedRoomsData(arg0);
+            return result;
+        }
+    }
+    async saveSharedTeamsData(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.saveSharedTeamsData(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.saveSharedTeamsData(arg0);
             return result;
         }
     }

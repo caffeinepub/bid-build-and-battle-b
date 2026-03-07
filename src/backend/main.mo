@@ -403,4 +403,50 @@ actor {
       registeredTeams.add(name, { team with status = #rejected });
     };
   };
+
+  // Shared Auction State (JSON blobs stored as Text)
+  var sharedAuctionState : Text = "";
+  var sharedTeamsData : Text = "";
+  var sharedPlayersData : Text = "";
+  var sharedRoomsData : Text = "";
+
+  /// Stores the complete auction state for cross-device sync.
+  public shared ({ caller }) func saveSharedAuctionState(stateJson : Text) : async () {
+    sharedAuctionState := stateJson;
+  };
+
+  // Public query — returns the current persistent auction state
+  public query func getSharedAuctionState() : async Text {
+    sharedAuctionState;
+  };
+
+  /// Stores the teams data for the full auction state.
+  public shared ({ caller }) func saveSharedTeamsData(teamsJson : Text) : async () {
+    sharedTeamsData := teamsJson;
+  };
+
+  // Public query — returns the current persistent teams data
+  public query func getSharedTeamsData() : async Text {
+    sharedTeamsData;
+  };
+
+  /// Stores the players data for the full auction state.
+  public shared ({ caller }) func saveSharedPlayersData(playersJson : Text) : async () {
+    sharedPlayersData := playersJson;
+  };
+
+  // Public query — returns the current persistent players data
+  public query func getSharedPlayersData() : async Text {
+    sharedPlayersData;
+  };
+
+  /// Stores the rooms data for the full auction state.
+  public shared ({ caller }) func saveSharedRoomsData(roomsJson : Text) : async () {
+    sharedRoomsData := roomsJson;
+  };
+
+  // Public query — returns the current persistent rooms data
+  public query func getSharedRoomsData() : async Text {
+    sharedRoomsData;
+  };
 };

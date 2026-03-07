@@ -1,11 +1,14 @@
 /**
  * useAuctionEngine — central hook for real multiplayer auction state.
- * Polls localStorage (shared state) every 2s for auction engine updates.
- * Uses local player store (getLocalPlayers) for player data — no ICP canister calls.
- * All admin actions write to localStorage.
+ * Polls localStorage AND the Motoko backend every 2s for auction engine updates.
+ * When backend has a newer engine (by lastUpdated), it wins and is written to
+ * localStorage — enabling cross-device real-time sync.
+ * All admin actions write to localStorage (and auto-sync to backend via backendSync).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+// Import backendSync to activate its self-registration side-effect
+import "../lib/backendSync";
 import {
   type AuctionEngine,
   type AuctionEngineTeam,
@@ -23,10 +26,17 @@ import {
   resolveCurrentPlayer,
   resumeAuctionEngine,
   saveAuctionEngine,
+  saveLocalPlayers,
   skipCurrentPlayer,
   startAuctionEngine,
   subscribeToEngineUpdates,
 } from "../lib/auctionStore";
+import {
+  fetchEngineFromBackend,
+  fetchPlayersFromBackend,
+  fetchRoomsFromBackend,
+  fetchTeamsFromBackend,
+} from "../lib/backendSync";
 
 export interface UseAuctionEngineResult {
   engine: AuctionEngine | null;
@@ -38,6 +48,8 @@ export interface UseAuctionEngineResult {
   isWaiting: boolean;
   isLoading: boolean;
   allPlayers: LocalPlayer[];
+  /** Immediately clears engine + allPlayers from React state (call before wiping backend). */
+  clearEngineState: () => void;
   // Admin actions
   initAuction: (
     playerIds: string[],
@@ -75,6 +87,11 @@ export function useAuctionEngine(): UseAuctionEngineResult {
   const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  // When true, the poll will skip backend restore (prevents re-hydrating wiped data)
+  const wipePendingRef = useRef(false);
+  const wipePendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Poll engine state every 2s
   const [engine, setEngine] = useState<AuctionEngine | null>(() =>
@@ -86,19 +103,81 @@ export function useAuctionEngine(): UseAuctionEngineResult {
     getLocalPlayers(),
   );
 
+  /** Immediately null out engine + players in React state and block poll restore for 10s */
+  const clearEngineState = useCallback(() => {
+    wipePendingRef.current = true;
+    setEngine(null);
+    setAllPlayers([]);
+    // Allow polling to resume after 10 seconds (enough time for backend wipe to propagate)
+    if (wipePendingTimerRef.current) clearTimeout(wipePendingTimerRef.current);
+    wipePendingTimerRef.current = setTimeout(() => {
+      wipePendingRef.current = false;
+    }, 10_000);
+  }, []);
+
   useEffect(() => {
-    const poll = () => {
-      const latest = getAuctionEngine();
-      setEngine(latest);
-      if (latest) {
-        setTimerSeconds(getTimerSecondsRemaining(latest));
+    const poll = async () => {
+      // Skip restore if a wipe is in progress
+      if (wipePendingRef.current) return;
+
+      // 1. Try fetching from backend — if it has a newer engine, use it
+      try {
+        const [backendEngine, backendPlayers] = await Promise.all([
+          fetchEngineFromBackend(),
+          fetchPlayersFromBackend(),
+        ]);
+
+        const localEngine = getAuctionEngine();
+
+        if (
+          backendEngine &&
+          (!localEngine ||
+            backendEngine.lastUpdated > (localEngine.lastUpdated ?? 0))
+        ) {
+          // Backend has newer state — write to localStorage and update React state
+          saveAuctionEngine(backendEngine);
+          setEngine(backendEngine);
+          setTimerSeconds(getTimerSecondsRemaining(backendEngine));
+        } else {
+          const latest = getAuctionEngine();
+          setEngine(latest);
+          if (latest) {
+            setTimerSeconds(getTimerSecondsRemaining(latest));
+          }
+        }
+
+        // Merge backend players if local is empty
+        if (backendPlayers && backendPlayers.length > 0) {
+          const localPlayers = getLocalPlayers();
+          if (localPlayers.length === 0) {
+            saveLocalPlayers(backendPlayers);
+            setAllPlayers(backendPlayers);
+          } else {
+            setAllPlayers(getLocalPlayers());
+          }
+        } else {
+          setAllPlayers(getLocalPlayers());
+        }
+      } catch {
+        // Backend unavailable — fall back to localStorage
+        const latest = getAuctionEngine();
+        setEngine(latest);
+        if (latest) {
+          setTimerSeconds(getTimerSecondsRemaining(latest));
+        }
+        setAllPlayers(getLocalPlayers());
       }
-      setAllPlayers(getLocalPlayers());
     };
 
-    poll(); // immediate
-    const id = setInterval(poll, 2000);
-    return () => clearInterval(id);
+    void poll(); // immediate
+    const id = setInterval(() => {
+      void poll();
+    }, 2000);
+    return () => {
+      clearInterval(id);
+      if (wipePendingTimerRef.current)
+        clearTimeout(wipePendingTimerRef.current);
+    };
   }, []);
 
   // BroadcastChannel: instantly receive engine updates from other tabs on same device
@@ -421,6 +500,7 @@ export function useAuctionEngine(): UseAuctionEngineResult {
     isWaiting,
     isLoading,
     allPlayers,
+    clearEngineState,
     initAuction,
     startAuction,
     pauseAuction,

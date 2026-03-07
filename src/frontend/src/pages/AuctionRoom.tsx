@@ -6,6 +6,17 @@
  *   Right: Bid History
  */
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +56,7 @@ import {
   resetAuctionEngineOnly,
 } from "../lib/auctionStore";
 import { getAdminSession } from "../lib/authConstants";
+import { clearAllBackendData } from "../lib/backendSync";
 import { formatCurrency } from "../utils/currencyFormatter";
 import { getCategoryLabel, getRoleLabel } from "../utils/playerHelpers";
 
@@ -209,9 +221,9 @@ function AuctionStatusHeader({
         </div>
 
         {/* Admin buttons */}
-        {isAdmin && hasEngine && (
+        {isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
-            {isWaiting && (
+            {hasEngine && isWaiting && (
               <Button
                 data-ocid="auction_header.primary_button"
                 size="sm"
@@ -223,7 +235,7 @@ function AuctionStatusHeader({
                 Start Auction
               </Button>
             )}
-            {(isLive || isPaused) && (
+            {hasEngine && (isLive || isPaused) && (
               <>
                 <Button
                   data-ocid="auction_header.toggle"
@@ -258,7 +270,8 @@ function AuctionStatusHeader({
                 </Button>
               </>
             )}
-            {isCompleted && (
+            {/* Show completed state controls */}
+            {hasEngine && isCompleted && (
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-muted text-muted-foreground border-border border text-xs font-medium">
                   ✓ Auction Ended
@@ -273,18 +286,45 @@ function AuctionStatusHeader({
                   <RefreshCw className="w-3.5 h-3.5" />
                   Re-run (same teams)
                 </Button>
+              </div>
+            )}
+            {/* New Auction button — always visible for admin */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
                 <Button
-                  data-ocid="auction_header.delete_button"
+                  data-ocid="auction_header.new_auction_button"
                   size="sm"
                   variant="outline"
-                  onClick={onNewAuction}
                   className="border-pink/30 text-pink hover:bg-pink/10 gap-1.5 text-xs"
                 >
                   <Play className="w-3.5 h-3.5" />
                   New Auction
                 </Button>
-              </div>
-            )}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start a New Auction?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete{" "}
+                    <strong>all rooms, teams, players, and bid history</strong>.
+                    Every device will see a completely fresh start. This action
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-ocid="new_auction.cancel_button">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    data-ocid="new_auction.confirm_button"
+                    onClick={onNewAuction}
+                    className="bg-pink hover:bg-pink/80 text-white"
+                  >
+                    Yes, Wipe Everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
       </div>
@@ -866,6 +906,7 @@ export default function AuctionRoom() {
     isWaiting,
     isCompleted,
     allPlayers,
+    clearEngineState,
     initAuction,
     startAuction,
     pauseAuction,
@@ -1102,10 +1143,15 @@ export default function AuctionRoom() {
 
   // ── New Auction handlers ──────────────────────────────────────────────────
 
-  const handleNewAuction = () => {
+  const handleNewAuction = async () => {
+    // 1. Immediately clear React state and block poll from restoring old data
+    clearEngineState();
+    // 2. Clear localStorage (instant)
     resetAllAuctionData();
+    // 3. Wipe the backend canister so other devices also see the reset
+    await clearAllBackendData();
     toast.success(
-      "All data cleared. You can now create a new auction room, add teams and players.",
+      "All data wiped. Create a new auction room, add teams and players to start fresh.",
     );
     navigate({ to: "/admin/dashboard" });
   };

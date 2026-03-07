@@ -1,3 +1,22 @@
+// ─── Backend sync (lazy — imported here to avoid circular-dep issues) ─────────
+// We use a registry pattern: backendSync.ts sets itself into this module.
+// This avoids the circular: auctionStore → backendSync → backend → (ICP runtime)
+// while still letting save functions push to backend fire-and-forget.
+
+type BackendSyncFns = {
+  syncEngineToBackend: (e: AuctionEngine) => void;
+  syncTeamsToBackend: (t: TeamRecord[]) => void;
+  syncPlayersToBackend: (p: LocalPlayer[]) => void;
+  syncRoomsToBackend: (r: AuctionRoom[]) => void;
+};
+
+let _sync: BackendSyncFns | null = null;
+
+/** Called once by backendSync.ts at module load time. */
+export function registerBackendSync(fns: BackendSyncFns): void {
+  _sync = fns;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AuctionRoom {
@@ -157,6 +176,7 @@ export function getAuctionRooms(): AuctionRoom[] {
 
 export function saveAuctionRooms(auctions: AuctionRoom[]): void {
   localStorage.setItem(AUCTIONS_KEY, JSON.stringify(auctions));
+  _sync?.syncRoomsToBackend(auctions);
 }
 
 export function addAuctionRoom(
@@ -194,6 +214,7 @@ export function saveTeams(teams: TeamRecord[]): void {
   } catch {
     // ignore
   }
+  _sync?.syncTeamsToBackend(teams);
 }
 
 export function approveTeamLocal(teamId: string): void {
@@ -409,6 +430,7 @@ export function saveAuctionEngine(engine: AuctionEngine): void {
   } catch {
     // BroadcastChannel not available in all environments
   }
+  _sync?.syncEngineToBackend(engine);
 }
 
 export function subscribeToEngineUpdates(
@@ -790,6 +812,7 @@ export function getLocalPlayers(): LocalPlayer[] {
 
 export function saveLocalPlayers(players: LocalPlayer[]): void {
   localStorage.setItem(PLAYERS_KEY, JSON.stringify(players));
+  _sync?.syncPlayersToBackend(players);
 }
 
 export function addLocalPlayer(
