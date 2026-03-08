@@ -154,6 +154,37 @@ export async function fetchRoomsFromBackend(): Promise<AuctionRoom[] | null> {
   }
 }
 
+// ─── Awaitable saves (blocking) ──────────────────────────────────────────────
+// Use these when you need to confirm the backend received the data before
+// proceeding (e.g. admin creating rooms/teams that other devices need immediately).
+
+/** Save teams to backend and WAIT for confirmation. Throws on failure. */
+export async function saveTeamsToBackendNow(
+  teams: TeamRecord[],
+): Promise<void> {
+  const json = JSON.stringify(teams);
+  const actor = await getActor();
+  await actor.saveSharedTeamsData(json);
+}
+
+/** Save rooms to backend and WAIT for confirmation. Throws on failure. */
+export async function saveRoomsToBackendNow(
+  rooms: AuctionRoom[],
+): Promise<void> {
+  const json = JSON.stringify(rooms);
+  const actor = await getActor();
+  await actor.saveSharedRoomsData(json);
+}
+
+/** Save engine to backend and WAIT for confirmation. Throws on failure. */
+export async function saveEngineToBackendNow(
+  engine: AuctionEngine,
+): Promise<void> {
+  const json = JSON.stringify(engine);
+  const actor = await getActor();
+  await actor.saveSharedAuctionState(json);
+}
+
 // ─── Full wipe: clear all shared backend state ───────────────────────────────
 
 /**

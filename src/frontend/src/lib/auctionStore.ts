@@ -99,6 +99,8 @@ export interface AuctionEngine {
   maxSquadSize: number;
   maxForeignPlayers: number;
   timerDuration: number; // seconds, default 15
+  initialTimerDuration: number; // seconds for when player first becomes active (default 15)
+  bidTimerDuration: number; // seconds reset after each bid (default 10)
   bidProcessingLock: boolean;
   lastUpdated: number; // Date.now(), used by clients to detect changes
 }
@@ -479,7 +481,9 @@ export function getDefaultAuctionEngine(): AuctionEngine {
     bidIncrement: 1_000_000, // 10 Lakhs
     maxSquadSize: 25,
     maxForeignPlayers: 4,
-    timerDuration: 60,
+    timerDuration: 15,
+    initialTimerDuration: 15,
+    bidTimerDuration: 10,
     bidProcessingLock: false,
     lastUpdated: Date.now(),
   };
@@ -491,7 +495,9 @@ export function initAuctionEngine(
   bidIncrement: number,
   maxSquadSize: number,
   maxForeignPlayers: number,
-  timerDuration = 60,
+  timerDuration = 15,
+  initialTimerDuration = 15,
+  bidTimerDuration = 10,
 ): void {
   const existing = getAuctionEngine();
   const engine: AuctionEngine = {
@@ -510,6 +516,8 @@ export function initAuctionEngine(
     maxSquadSize,
     maxForeignPlayers,
     timerDuration,
+    initialTimerDuration,
+    bidTimerDuration,
     bidProcessingLock: false,
     lastUpdated: Date.now(),
   };
@@ -721,7 +729,11 @@ export function placeBidInEngine(
 }
 
 export function getTimerSecondsRemaining(engine: AuctionEngine): number {
-  const duration = engine.timerDuration ?? 15;
+  // Use bidTimerDuration after a bid has been placed, initialTimerDuration at start
+  const duration =
+    engine.highestBidTeamId !== null
+      ? (engine.bidTimerDuration ?? engine.timerDuration ?? 10)
+      : (engine.initialTimerDuration ?? engine.timerDuration ?? 15);
   if (engine.status !== "live") return duration;
   return Math.max(
     0,

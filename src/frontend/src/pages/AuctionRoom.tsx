@@ -46,9 +46,13 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import AppFooter from "../components/AppFooter";
+import AuctionAnalyticsPanel from "../components/AuctionAnalyticsPanel";
+import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
 import AuctionTimer from "../components/AuctionTimer";
+import B3Logo from "../components/B3Logo";
 import Modal from "../components/Modal";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
+import { useBidNotification } from "../hooks/useBidNotification";
 import type { BidRecord, LocalPlayer } from "../lib/auctionStore";
 import {
   getAuctionRooms,
@@ -334,6 +338,9 @@ function AuctionStatusHeader({
 
 // ─── Initialize Auction Form (shown when waiting) ─────────────────────────────
 
+const INITIAL_TIMER_PRESETS = [10, 15, 20, 30, 60];
+const BID_TIMER_PRESETS = [5, 10, 15, 20, 30];
+
 function InitializeAuctionForm({
   allPlayers,
   onInit,
@@ -343,19 +350,20 @@ function InitializeAuctionForm({
     bidIncrement: number,
     maxSquad: number,
     maxForeign: number,
-    timerDuration: number,
+    initialTimerDuration: number,
+    bidTimerDuration: number,
   ) => void;
 }) {
   const [bidIncrementL, setBidIncrementL] = useState("10");
   const [maxSquad, setMaxSquad] = useState("25");
   const [maxForeign, setMaxForeign] = useState("4");
-  const [timerDuration, setTimerDuration] = useState("60");
+  const [initialTimer, setInitialTimer] = useState(15);
+  const [bidTimer, setBidTimer] = useState(10);
 
   const handleSubmit = () => {
     const increment = Math.round(Number(bidIncrementL) * 100_000);
     const squad = Number(maxSquad);
     const foreign = Number(maxForeign);
-    const timer = Number(timerDuration);
 
     if (!increment || increment < 100_000) {
       toast.error("Bid increment must be at least ₹1L");
@@ -371,11 +379,7 @@ function InitializeAuctionForm({
       );
       return;
     }
-    if (!timer || timer < 5) {
-      toast.error("Timer must be at least 5 seconds");
-      return;
-    }
-    onInit(increment, squad, foreign, timer);
+    onInit(increment, squad, foreign, initialTimer, bidTimer);
   };
 
   return (
@@ -431,17 +435,63 @@ function InitializeAuctionForm({
             className="h-8 text-sm"
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Timer (sec)</Label>
-          <Input
-            data-ocid="auction_setup.timer_input"
-            type="number"
-            min="5"
-            max="300"
-            value={timerDuration}
-            onChange={(e) => setTimerDuration(e.target.value)}
-            className="h-8 text-sm"
-          />
+      </div>
+
+      {/* Initial Bid Timer */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground font-semibold">
+            Initial Timer
+          </Label>
+          <span className="text-xs text-muted-foreground/60">
+            (when player appears)
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {INITIAL_TIMER_PRESETS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-ocid="auction_setup.initial_timer.toggle"
+              onClick={() => setInitialTimer(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                initialTimer === t
+                  ? "bg-cyan/20 border-cyan text-cyan"
+                  : "bg-muted/30 border-border/50 text-muted-foreground hover:border-cyan/40 hover:text-cyan"
+              }`}
+            >
+              {t}s
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bid Reset Timer */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground font-semibold">
+            Bid Reset Timer
+          </Label>
+          <span className="text-xs text-muted-foreground/60">
+            (resets after each bid)
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {BID_TIMER_PRESETS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-ocid="auction_setup.bid_timer.toggle"
+              onClick={() => setBidTimer(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                bidTimer === t
+                  ? "bg-pink/20 border-pink text-pink"
+                  : "bg-muted/30 border-border/50 text-muted-foreground hover:border-pink/40 hover:text-pink"
+              }`}
+            >
+              {t}s
+            </button>
+          ))}
         </div>
       </div>
 
@@ -570,6 +620,7 @@ function LiveAuctionCenter({
   isPaused,
   isAdmin,
   actionPending,
+  isNewBid,
   onForceSell,
   onUnsold,
   onSkip,
@@ -583,6 +634,7 @@ function LiveAuctionCenter({
   isPaused: boolean;
   isAdmin: boolean;
   actionPending: boolean;
+  isNewBid: boolean;
   onForceSell: () => void;
   onUnsold: () => void;
   onSkip: () => void;
@@ -591,7 +643,11 @@ function LiveAuctionCenter({
 }) {
   const currentBid = engine?.currentBid ?? 0;
   const leadingTeam = engine?.highestBidTeamName ?? "";
-  const timerDuration = engine?.timerDuration ?? 15;
+  // Effective total time: use bidTimerDuration after first bid, initialTimerDuration before
+  const hasBid = !!engine?.highestBidTeamId;
+  const effectiveTimerDuration = hasBid
+    ? (engine?.bidTimerDuration ?? engine?.timerDuration ?? 10)
+    : (engine?.initialTimerDuration ?? engine?.timerDuration ?? 15);
   const isActive = isLive || isPaused;
   const hasPlayer = !!engine?.currentPlayerId;
   const isResolved = !hasPlayer && (engine?.playerQueue.length ?? 0) > 0;
@@ -672,8 +728,8 @@ function LiveAuctionCenter({
           <span>Time Remaining</span>
         </div>
         <AuctionTimer
-          timeLeft={isLive ? timerSeconds : timerDuration}
-          totalTime={timerDuration}
+          timeLeft={isLive ? timerSeconds : effectiveTimerDuration}
+          totalTime={effectiveTimerDuration}
           size="lg"
         />
         {timerSeconds === 0 && isLive && hasPlayer && (
@@ -689,15 +745,22 @@ function LiveAuctionCenter({
       </div>
 
       {/* Current Bid */}
-      <div className="card-navy rounded-2xl p-5 text-center space-y-2">
+      <div
+        className={`card-navy rounded-2xl p-5 text-center space-y-2 transition-all duration-300 ${isNewBid ? "animate-leading-team-flash" : ""}`}
+      >
         <p className="text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-center gap-1.5">
           <TrendingUp className="w-3.5 h-3.5" />
           Current Bid
+          {isNewBid && (
+            <span className="text-xs font-bold text-cyan bg-cyan/20 px-2 py-0.5 rounded-full border border-cyan/40 animate-pulse ml-1">
+              NEW
+            </span>
+          )}
         </p>
         {currentBid > 0 ? (
           <p
             data-ocid="auction_room.section"
-            className="text-4xl font-extrabold text-cyan leading-none"
+            className={`text-4xl font-extrabold text-cyan leading-none ${isNewBid ? "animate-bid-amount-pop" : ""}`}
           >
             {formatCurrency(BigInt(Math.round(currentBid)))}
           </p>
@@ -710,7 +773,11 @@ function LiveAuctionCenter({
           <p className="text-2xl font-bold text-muted-foreground/40">—</p>
         )}
         {leadingTeam && (
-          <p className="text-sm font-semibold text-pink">🏏 {leadingTeam}</p>
+          <p
+            className={`text-sm font-semibold text-pink ${isNewBid ? "animate-pulse" : ""}`}
+          >
+            🏏 {leadingTeam}
+          </p>
         )}
       </div>
 
@@ -818,11 +885,30 @@ function BidHistoryPanel({
 }) {
   const history = bidHistory ?? [];
 
+  // Track which bid IDs should animate (newly arrived)
+  const [animatedIds, setAnimatedIds] = React.useState<Set<string>>(new Set());
+  const prevLengthRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (history.length > prevLengthRef.current && history[0]) {
+      const newId = history[0].id;
+      setAnimatedIds((prev) => new Set([...prev, newId]));
+      setTimeout(() => {
+        setAnimatedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(newId);
+          return next;
+        });
+      }, 600);
+    }
+    prevLengthRef.current = history.length;
+  }, [history]);
+
   return (
     <div className="card-navy rounded-2xl p-4 h-full">
       <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-        <Radio className="w-3.5 h-3.5 text-cyan" />
-        Bid History
+        <Radio className="w-3.5 h-3.5 text-cyan animate-pulse" />
+        Live Bid Feed
         {history.length > 0 && (
           <span className="ml-auto text-xs text-muted-foreground font-normal">
             {history.length} bids
@@ -839,31 +925,36 @@ function BidHistoryPanel({
         </div>
       ) : (
         <ScrollArea className="h-[calc(100vh-320px)] min-h-[400px]">
-          <div className="space-y-2 pr-2">
+          <div className="space-y-1.5 pr-2">
             {history.map((entry, i) => {
               const time = new Date(entry.timestamp).toLocaleTimeString(
                 "en-IN",
                 { timeStyle: "short" },
               );
+              const isLatest = i === 0;
+              const isAnimating = animatedIds.has(entry.id);
               return (
                 <div
                   key={entry.id}
                   data-ocid={`bid_history.item.${i + 1}`}
-                  className={`flex items-start justify-between py-2.5 px-3 rounded-xl border transition-all ${
-                    i === 0
+                  className={`flex items-start justify-between py-2.5 px-3 rounded-xl border transition-all duration-300 ${
+                    isLatest
                       ? "bg-cyan/10 border-cyan/30"
                       : "bg-muted/20 border-border/30"
-                  }`}
+                  } ${isAnimating ? "animate-bid-entry" : ""}`}
                 >
                   <div className="flex items-start gap-2 min-w-0">
-                    {i === 0 && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan mt-1.5 shrink-0 animate-pulse" />
-                    )}
-                    {i > 0 && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
+                    {isLatest ? (
+                      <div className="w-5 h-5 rounded-full bg-cyan/20 border border-cyan/40 flex items-center justify-center mt-0.5 shrink-0">
+                        <Gavel className="w-2.5 h-2.5 text-cyan" />
+                      </div>
+                    ) : (
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 ml-1.5 shrink-0" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p
+                        className={`text-sm font-semibold truncate ${isLatest ? "text-cyan" : "text-foreground"}`}
+                      >
                         {entry.teamName}
                       </p>
                       {entry.playerName && (
@@ -875,7 +966,7 @@ function BidHistoryPanel({
                   </div>
                   <div className="shrink-0 ml-2 text-right">
                     <p
-                      className={`text-sm font-bold ${i === 0 ? "text-cyan" : "text-muted-foreground"}`}
+                      className={`text-sm font-bold ${isLatest ? "text-pink" : "text-muted-foreground"}`}
                     >
                       {formatCurrency(BigInt(Math.round(entry.amount)))}
                     </p>
@@ -925,6 +1016,10 @@ export default function AuctionRoom() {
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [skipModalOpen, setSkipModalOpen] = useState(false);
   const [actionPending, setActionPending] = useState(false);
+  const [recovering, setRecovering] = useState(true);
+
+  // Real-time bid notification for admin view
+  const { isNewBid } = useBidNotification(engine);
 
   const rooms = getAuctionRooms();
   const auctionName = rooms[0]?.auctionName ?? "B³ Auction";
@@ -975,6 +1070,12 @@ export default function AuctionRoom() {
     };
   }, []);
 
+  // Crash recovery loading screen — show briefly on mount while backend syncs
+  useEffect(() => {
+    const t = setTimeout(() => setRecovering(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
+
   // ── Init + Start handler ──────────────────────────────────────────────────
 
   const handleInitAndStart = useCallback(
@@ -982,7 +1083,8 @@ export default function AuctionRoom() {
       bidIncrement: number,
       maxSquad: number,
       maxForeign: number,
-      timerDuration: number,
+      initialTimerDuration: number,
+      bidTimerDuration: number,
     ) => {
       setActionPending(true);
       try {
@@ -996,7 +1098,9 @@ export default function AuctionRoom() {
           bidIncrement,
           maxSquad,
           maxForeign,
-          timerDuration,
+          initialTimerDuration, // timerDuration = same as initialTimerDuration
+          initialTimerDuration,
+          bidTimerDuration,
         );
         const firstPlayer = allPlayers[0];
         await startAuction(firstPlayer.basePrice, firstPlayer.name);
@@ -1209,6 +1313,32 @@ export default function AuctionRoom() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* ── Crash recovery overlay ──────────────────────────────────────── */}
+      {recovering && (
+        <div
+          className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4 transition-opacity duration-500"
+          data-ocid="auction_room.loading_state"
+        >
+          <B3Logo size={64} glowing />
+          <p className="text-base font-semibold text-foreground">
+            Restoring Auction State...
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan dot-1" />
+            <span className="w-2 h-2 rounded-full bg-cyan dot-2" />
+            <span className="w-2 h-2 rounded-full bg-cyan dot-3" />
+          </div>
+        </div>
+      )}
+
+      {/* ── Drama overlay (Going Once / Going Twice / SOLD!) ────────────── */}
+      <AuctionDramaOverlay
+        timerSeconds={timerSeconds}
+        isLive={isLive}
+        hasPlayer={!!engine?.currentPlayerId}
+        highestBidder={engine?.highestBidTeamName ?? null}
+      />
+
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="nav-glass sticky top-0 z-40 px-4 py-3">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
@@ -1225,11 +1355,7 @@ export default function AuctionRoom() {
             </button>
             <div className="w-px h-5 bg-border" aria-hidden="true" />
             <div className="flex items-center gap-2">
-              <img
-                src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
-                alt="B³ Logo"
-                className="h-8 w-auto object-contain"
-              />
+              <B3Logo size={32} />
               <Gavel className="w-4 h-4 text-cyan" />
               <span className="font-bold text-sm tracking-wide text-gradient">
                 AUCTION ROOM
@@ -1317,6 +1443,7 @@ export default function AuctionRoom() {
               isPaused={isPaused}
               isAdmin={!!isAdmin}
               actionPending={actionPending}
+              isNewBid={isNewBid}
               onForceSell={() => setSoldModalOpen(true)}
               onUnsold={() => setUnsoldModalOpen(true)}
               onSkip={() => setSkipModalOpen(true)}
@@ -1325,7 +1452,7 @@ export default function AuctionRoom() {
             />
           </section>
 
-          {/* ── Right: Bid History + Teams ───────────────────────────── */}
+          {/* ── Right: Bid History + Teams + Analytics ───────────────── */}
           <section className="flex flex-col gap-4">
             <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 flex items-center gap-1.5">
               <Radio className="w-3.5 h-3.5 text-cyan" />
@@ -1358,7 +1485,13 @@ export default function AuctionRoom() {
                       <div
                         key={team.teamId}
                         data-ocid={`teams_panel.item.${i + 1}`}
-                        className={`rounded-xl p-3 border transition-all ${isLeading ? "bg-cyan/10 border-cyan/30" : "bg-card/50 border-border/50"}`}
+                        className={`rounded-xl p-3 border transition-all duration-300 ${
+                          isLeading && isNewBid
+                            ? "animate-leading-team-flash"
+                            : isLeading
+                              ? "bg-cyan/10 border-cyan/30"
+                              : "bg-card/50 border-border/50"
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="font-semibold text-xs text-foreground truncate mr-2">
@@ -1367,9 +1500,16 @@ export default function AuctionRoom() {
                               <span className="ml-1 text-cyan">🏏</span>
                             )}
                           </p>
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {team.playersBought} bought
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isLeading && isNewBid && (
+                              <span className="text-xs font-bold text-cyan bg-cyan/20 px-1.5 py-0.5 rounded-full border border-cyan/40 animate-pulse">
+                                LEADING
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {team.playersBought} bought
+                            </span>
+                          </div>
                         </div>
                         <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-1">
                           <div
@@ -1419,6 +1559,13 @@ export default function AuctionRoom() {
                 </ScrollArea>
               </div>
             )}
+
+            {/* Admin Analytics Panel */}
+            <AuctionAnalyticsPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              variant="admin"
+            />
           </section>
         </div>
       </main>

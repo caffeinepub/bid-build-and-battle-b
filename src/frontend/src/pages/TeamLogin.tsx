@@ -48,8 +48,8 @@ const ERROR_CONFIG: Record<
     body: "We couldn't find any auction data. Your host needs to share the Room Key and Team Passkey. If the admin is using a different device, ask them to click 'Export Credentials' in their dashboard and share the code with you.",
   },
   wrong_passkey: {
-    title: "Team not found",
-    body: "That passkey doesn't match any team in this room. Make sure you're using the exact passkey your host gave you (format: TEAM-XXXX). If you're on a new device, use 'Having trouble?' below to import credentials.",
+    title: "Team passkey not found",
+    body: "That passkey doesn't match any registered team. Double-check the passkey (format: TEAM-XXXX) given by your host. If the admin just created the team, wait 10 seconds and try again — backend sync can take a moment.",
   },
   wrong_room: {
     title: "Wrong room key",
@@ -288,12 +288,18 @@ export default function TeamLogin() {
     let team = teams.find((t) => t.passkey === pendingSession.passkey);
 
     try {
-      const backendTeams = await fetchTeamsFromBackend();
+      const [backendTeams, backendRooms] = await Promise.all([
+        fetchTeamsFromBackend(),
+        fetchRoomsFromBackend(),
+      ]);
       // Save unconditionally (not null) — overwrite stale local data
       if (backendTeams !== null) {
         saveTeams(backendTeams);
         teams = backendTeams;
         team = backendTeams.find((t) => t.passkey === pendingSession.passkey);
+      }
+      if (backendRooms !== null) {
+        saveAuctionRooms(backendRooms);
       }
     } catch {
       // Backend unavailable — fall back to local data
@@ -358,30 +364,50 @@ export default function TeamLogin() {
     setBgFetching(true);
 
     // Always fetch from backend first — ensures cross-device login works.
-    // Save unconditionally (overwrite stale localStorage) whenever the value
-    // is not null. An empty array [] is valid and should still overwrite local data.
-    try {
-      const [backendTeams, backendRooms] = await Promise.all([
-        fetchTeamsFromBackend(),
-        fetchRoomsFromBackend(),
-      ]);
+    // Retry up to 3 times (with 1s delay) in case the admin's save hasn't
+    // propagated yet (fire-and-forget race condition).
+    const normalizedPasskey = passkey.trim().toUpperCase();
+    const normalizedRoom = roomKey.trim().toUpperCase();
 
-      if (backendTeams !== null) {
-        saveTeams(backendTeams);
+    let foundInBackend = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const [backendTeams, backendRooms] = await Promise.all([
+          fetchTeamsFromBackend(),
+          fetchRoomsFromBackend(),
+        ]);
+
+        if (backendTeams !== null) {
+          saveTeams(backendTeams);
+        }
+        if (backendRooms !== null) {
+          saveAuctionRooms(backendRooms);
+        }
+
+        // Check if the passkey now exists after this fetch
+        if (backendTeams !== null) {
+          const found = backendTeams.find(
+            (t) => t.passkey === normalizedPasskey,
+          );
+          if (found) {
+            foundInBackend = true;
+            break;
+          }
+        }
+      } catch {
+        // Backend unavailable — break and fall through to local data
+        break;
       }
-      if (backendRooms !== null) {
-        saveAuctionRooms(backendRooms);
+
+      // If not found yet and more attempts remain, wait 1s before retry
+      if (!foundInBackend && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1000));
       }
-    } catch {
-      // Backend unavailable — fall through to local data
-    } finally {
-      setBgFetching(false);
     }
 
-    const result = validateTeamLogin(
-      passkey.trim().toUpperCase(),
-      roomKey.trim().toUpperCase(),
-    );
+    setBgFetching(false);
+
+    const result = validateTeamLogin(normalizedPasskey, normalizedRoom);
 
     if (result.error === "pending" && result.session) {
       setPendingSession(result.session);
@@ -632,7 +658,7 @@ export default function TeamLogin() {
                 <span className="flex items-center gap-2.5">
                   <Loader2 className="w-5 h-5 animate-spin" />
                   {bgFetching
-                    ? "Connecting to auction server…"
+                    ? "Fetching auction data… (may take a few seconds)"
                     : "Verifying credentials…"}
                 </span>
               ) : (
@@ -745,7 +771,7 @@ function BrandHeader() {
     <div className="text-center mb-7">
       <div className="relative inline-block">
         <img
-          src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+          src="/assets/uploads/Cricket_auction_logo_for_Thanjavur_event-removebg-preview-1.png"
           alt="IPL Auction — Bid Build Battle"
           className="w-32 sm:w-40 h-auto object-contain mx-auto mb-4 animate-splash-in"
           style={{

@@ -4,6 +4,8 @@ import { Clock, Eye, Radio, TrendingUp, Trophy, Users } from "lucide-react";
 import React from "react";
 import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
+import AuctionAnalyticsPanel from "../components/AuctionAnalyticsPanel";
+import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
 import BidHighlight from "../components/BidHighlight";
 import SkeletonLoader from "../components/SkeletonLoader";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
@@ -56,9 +58,9 @@ export default function WatchPage() {
   const teams = engine?.teams ?? [];
 
   const timerColor =
-    timerSeconds <= 10
+    timerSeconds <= 5
       ? "text-destructive animate-timer-pulse"
-      : timerSeconds <= 20
+      : timerSeconds <= 10
         ? "text-chart-4"
         : "text-cyan";
 
@@ -94,6 +96,14 @@ export default function WatchPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* ── Drama overlay (Going Once / Going Twice / SOLD!) ────────────── */}
+      <AuctionDramaOverlay
+        timerSeconds={timerSeconds}
+        isLive={isLive}
+        hasPlayer={!!engine?.currentPlayerId}
+        highestBidder={engine?.highestBidTeamName ?? null}
+      />
+
       <AppHeader />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
@@ -124,7 +134,7 @@ export default function WatchPage() {
           <div className="relative flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <img
-                src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+                src="/assets/uploads/Cricket_auction_logo_for_Thanjavur_event-removebg-preview-1.png"
                 alt="B³"
                 className="h-14 w-auto object-contain flex-shrink-0"
                 style={{
@@ -368,8 +378,15 @@ export default function WatchPage() {
             )}
           </div>
 
-          {/* Right: Teams */}
+          {/* Right: Analytics + Teams */}
           <div className="space-y-4">
+            {/* Basic Analytics for spectators */}
+            <AuctionAnalyticsPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              variant="basic"
+            />
+
             {teams.length > 0 ? (
               <div className="card-navy rounded-xl p-5 border border-border">
                 <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">

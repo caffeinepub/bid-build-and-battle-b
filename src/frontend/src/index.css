@@ -277,6 +277,96 @@
   }
 }
 
+@keyframes bid-entry-slide {
+  0% {
+    transform: translateY(-100%) scaleY(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(4px) scaleY(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bid-notification-in {
+  0% {
+    transform: translateY(-120%) scale(0.9);
+    opacity: 0;
+  }
+  65% {
+    transform: translateY(6px) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bid-notification-out {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes bid-amount-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  70% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes leading-team-flash {
+  0%,
+  100% {
+    background-color: oklch(var(--cyan) / 0.1);
+    border-color: oklch(var(--cyan) / 0.3);
+    box-shadow: none;
+  }
+  30% {
+    background-color: oklch(var(--cyan) / 0.3);
+    border-color: oklch(var(--cyan) / 0.8);
+    box-shadow: 0 0 20px oklch(var(--cyan) / 0.4), 0 0 40px
+      oklch(var(--cyan) / 0.2);
+  }
+}
+
+@keyframes score-tick {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  51% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .animate-bid-flash {
   animation: bid-flash 0.8s ease-out;
 }
@@ -299,6 +389,232 @@
 
 .animate-timer-pulse {
   animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.animate-bid-entry {
+  animation: bid-entry-slide 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-bid-notification-in {
+  animation: bid-notification-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-bid-notification-out {
+  animation: bid-notification-out 0.3s ease-in both;
+}
+
+.animate-bid-amount-pop {
+  animation: bid-amount-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-leading-team-flash {
+  animation: leading-team-flash 0.6s ease-out both;
+}
+
+.animate-score-tick {
+  animation: score-tick 0.35s ease-in-out both;
+}
+
+/* ── Splash screen animations ── */
+@keyframes ball-roll {
+  0% {
+    transform: translateX(-120px) translateY(0px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(0px) translateY(-8px) rotate(480deg);
+    opacity: 1;
+  }
+  75% {
+    transform: translateX(8px) translateY(0px) rotate(540deg);
+    opacity: 1;
+  }
+  85% {
+    transform: translateX(-4px) translateY(-3px) rotate(570deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0px) translateY(0px) rotate(600deg);
+    opacity: 0;
+  }
+}
+
+@keyframes logo-gold-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 16px oklch(0.82 0.18 85 / 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px oklch(0.82 0.18 85 / 0.85))
+      drop-shadow(0 0 80px oklch(0.82 0.18 85 / 0.4));
+  }
+}
+
+@keyframes logo-hit-bounce {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.06) rotate(-1deg);
+  }
+  55% {
+    transform: scale(0.97) rotate(0.5deg);
+  }
+  75% {
+    transform: scale(1.02) rotate(-0.3deg);
+  }
+}
+
+@keyframes stadium-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes light-beam {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.16;
+  }
+}
+
+.animate-ball-roll {
+  animation: ball-roll 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+.animate-logo-glow {
+  animation: logo-gold-glow 1.8s ease-in-out infinite;
+}
+.animate-logo-hit {
+  animation: logo-hit-bounce 0.5s ease-out;
+}
+.animate-stadium-in {
+  animation: stadium-fade-in 0.8s ease-out both;
+}
+.animate-splash-exit {
+  animation: splash-exit 0.6s ease-in forwards;
+}
+.animate-light-beam {
+  animation: light-beam 3s ease-in-out infinite;
+}
+
+.dot-1 {
+  animation: dot-bounce 1.4s ease-in-out infinite 0s;
+}
+.dot-2 {
+  animation: dot-bounce 1.4s ease-in-out infinite 0.2s;
+}
+.dot-3 {
+  animation: dot-bounce 1.4s ease-in-out infinite 0.4s;
+}
+
+/* ── Drama overlay animations (Phase 4) ── */
+@keyframes dramaFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dramaScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dramaBounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dramaBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dramaPulse {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes starBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.5) rotate(180deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) rotate(360deg) translateY(-20px);
+  }
 }
 
 /* Scrollbar styling */

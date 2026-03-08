@@ -19,6 +19,7 @@ import {
   clearAdminSession,
   getAdminSession,
 } from "../lib/authConstants";
+import B3Logo from "./B3Logo";
 
 export default function AppHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,11 +95,11 @@ export default function AppHeader() {
             onClick={() => void navigate({ to: "/" })}
             className="flex items-center gap-2 group"
             aria-label="Go to home"
+            data-ocid="header.logo_link"
           >
-            <img
-              src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
-              alt="B³ IPL Auction"
-              className="h-9 w-auto object-contain"
+            <B3Logo
+              size={36}
+              className="transition-transform group-hover:scale-105"
             />
             <span className="hidden sm:block text-xs text-muted-foreground font-medium">
               Bid Build Battle

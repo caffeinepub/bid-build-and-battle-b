@@ -80,6 +80,8 @@ import { clearAdminSession } from "../lib/authConstants";
 import "../lib/backendSync";
 import {
   clearAllBackendData,
+  saveRoomsToBackendNow,
+  saveTeamsToBackendNow,
   syncEngineToBackend,
   syncPlayersToBackend,
   syncRoomsToBackend,
@@ -1222,7 +1224,7 @@ function RoomsTeamsTab() {
     setTeams(getTeams());
   };
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     setRoomFormError("");
     if (!newAuctionName.trim()) {
@@ -1250,10 +1252,19 @@ function RoomsTeamsTab() {
     setNewAuctionName("");
     setNewRoomKey(generateRoomKey());
     refreshData();
+    // Await backend confirmation so teams on other devices can immediately log in
+    try {
+      await saveRoomsToBackendNow(getAuctionRooms());
+    } catch {
+      // Backend unavailable — local data is still saved, warn user
+      toast.warning(
+        "Room saved locally. Backend sync failed — teams on other devices may need to wait a moment before joining.",
+      );
+    }
     toast.success(`Auction room "${room.auctionName}" created!`);
   };
 
-  const handleAddTeam = (e: React.FormEvent) => {
+  const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     setTeamFormError("");
     if (!selectedAuctionId) {
@@ -1277,6 +1288,17 @@ function RoomsTeamsTab() {
     setNewTeamName("");
     setNewBudgetCr("");
     refreshData();
+    // Await backend confirmation so teams on other devices can immediately log in
+    try {
+      await Promise.all([
+        saveTeamsToBackendNow(getTeams()),
+        saveRoomsToBackendNow(getAuctionRooms()),
+      ]);
+    } catch {
+      toast.warning(
+        "Team saved locally. Backend sync failed — teams on other devices may need the Export Code to join.",
+      );
+    }
     toast.success(
       `Team "${team.teamName}" created with passkey ${team.passkey}!`,
     );

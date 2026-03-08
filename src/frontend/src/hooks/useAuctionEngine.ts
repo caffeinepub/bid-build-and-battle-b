@@ -61,6 +61,8 @@ export interface UseAuctionEngineResult {
     maxSquadSize: number,
     maxForeignPlayers: number,
     timerDuration?: number,
+    initialTimerDuration?: number,
+    bidTimerDuration?: number,
   ) => void;
   startAuction: (playerBasePrice: number, playerName: string) => Promise<void>;
   pauseAuction: () => Promise<void>;
@@ -101,7 +103,7 @@ export function useAuctionEngine(): UseAuctionEngineResult {
   const [engine, setEngine] = useState<AuctionEngine | null>(() =>
     getAuctionEngine(),
   );
-  const [timerSeconds, setTimerSeconds] = useState(60);
+  const [timerSeconds, setTimerSeconds] = useState(15);
   // Poll local players every 2s
   const [allPlayers, setAllPlayers] = useState<LocalPlayer[]>(() =>
     getLocalPlayers(),
@@ -219,9 +221,10 @@ export function useAuctionEngine(): UseAuctionEngineResult {
     };
 
     void poll(); // immediate
+    // 1-second poll for near-real-time bid visibility across devices
     const id = setInterval(() => {
       void poll();
-    }, 2000);
+    }, 1000);
     return () => {
       clearInterval(id);
       if (wipePendingTimerRef.current)
@@ -264,7 +267,9 @@ export function useAuctionEngine(): UseAuctionEngineResult {
       bidIncrement: number,
       maxSquadSize: number,
       maxForeignPlayers: number,
-      timerDuration = 60,
+      timerDuration = 15,
+      initialTimerDuration = 15,
+      bidTimerDuration = 10,
     ) => {
       // Build teams from localStorage
       const storedTeams = getTeams();
@@ -284,6 +289,8 @@ export function useAuctionEngine(): UseAuctionEngineResult {
         maxSquadSize,
         maxForeignPlayers,
         timerDuration,
+        initialTimerDuration,
+        bidTimerDuration,
       );
 
       const latest = getAuctionEngine();

@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   Clock,
+  Gavel,
   LogOut,
   TrendingUp,
   Trophy,
@@ -15,10 +16,14 @@ import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
+import AuctionAnalyticsPanel from "../components/AuctionAnalyticsPanel";
+import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
+import B3Logo from "../components/B3Logo";
 import BidHighlight from "../components/BidHighlight";
 import ConfirmModal from "../components/ConfirmModal";
 import SkeletonLoader from "../components/SkeletonLoader";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
+import { useBidNotification } from "../hooks/useBidNotification";
 import {
   clearTeamSession,
   getAuctionEngine,
@@ -58,7 +63,34 @@ export default function TeamDashboard() {
 
   const [confirmBid, setConfirmBid] = useState(false);
   const [isBidding, setIsBidding] = useState(false);
+  const [recovering, setRecovering] = useState(true);
   const prevPlayerIdRef = useRef<string | null>(null);
+
+  // Real-time bid notification
+  const { notification: bidNotification, isNewBid } =
+    useBidNotification(engine);
+
+  // Track new bid history entries for entrance animation
+  const [animatedBidIds, setAnimatedBidIds] = useState<Set<string>>(new Set());
+  const prevBidHistoryLengthRef = useRef(0);
+  useEffect(() => {
+    const bidHistory = engine?.bidHistory ?? [];
+    if (bidHistory.length > prevBidHistoryLengthRef.current) {
+      const newEntry = bidHistory[0];
+      if (newEntry) {
+        setAnimatedBidIds((prev) => new Set([...prev, newEntry.id]));
+        // Remove animation class after it plays
+        setTimeout(() => {
+          setAnimatedBidIds((prev) => {
+            const next = new Set(prev);
+            next.delete(newEntry.id);
+            return next;
+          });
+        }, 600);
+      }
+    }
+    prevBidHistoryLengthRef.current = bidHistory.length;
+  }, [engine?.bidHistory]);
 
   // Reset confirm on new player
   useEffect(() => {
@@ -121,6 +153,12 @@ export default function TeamDashboard() {
     };
     void syncOnMount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Crash recovery loading screen
+  useEffect(() => {
+    const t = setTimeout(() => setRecovering(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleLogout = () => {
     clearTeamSession();
@@ -237,11 +275,11 @@ export default function TeamDashboard() {
     }
   };
 
-  // Timer color
+  // Timer color — matches AuctionTimer thresholds (red ≤5s, amber ≤10s)
   const timerColor =
-    timerSeconds <= 10
+    timerSeconds <= 5
       ? "text-destructive animate-timer-pulse"
-      : timerSeconds <= 20
+      : timerSeconds <= 10
         ? "text-chart-4"
         : "text-cyan";
 
@@ -274,17 +312,39 @@ export default function TeamDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* ── Crash recovery overlay ──────────────────────────────────────── */}
+      {recovering && (
+        <div
+          className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4 transition-opacity duration-500"
+          data-ocid="team_dashboard.loading_state"
+        >
+          <B3Logo size={64} glowing />
+          <p className="text-base font-semibold text-foreground">
+            Restoring Auction State...
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan dot-1" />
+            <span className="w-2 h-2 rounded-full bg-cyan dot-2" />
+            <span className="w-2 h-2 rounded-full bg-cyan dot-3" />
+          </div>
+        </div>
+      )}
+
+      {/* ── Drama overlay (Going Once / Going Twice / SOLD!) ────────────── */}
+      <AuctionDramaOverlay
+        timerSeconds={timerSeconds}
+        isLive={isLive}
+        hasPlayer={!!engine?.currentPlayerId}
+        highestBidder={engine?.highestBidTeamName ?? null}
+      />
+
       <AppHeader />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <img
-              src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
-              alt="B³ Logo"
-              className="h-10 w-auto object-contain"
-            />
+            <B3Logo size={40} />
             <div>
               <h1 className="text-2xl font-bold text-foreground">
                 {session?.teamName ?? "Team Dashboard"}
@@ -307,7 +367,7 @@ export default function TeamDashboard() {
 
         {/* Auction Status Banner */}
         <div
-          className={`flex items-center gap-3 p-3 rounded-xl mb-6 border ${statusClass}`}
+          className={`flex items-center gap-3 p-3 rounded-xl mb-3 border ${statusClass}`}
         >
           <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass}`} />
           <span className="text-sm font-medium text-foreground">
@@ -319,6 +379,64 @@ export default function TeamDashboard() {
             </span>
           )}
         </div>
+
+        {/* Live Bid Notification Banner */}
+        {bidNotification && isLive && (
+          <div
+            key={bidNotification.id}
+            className="animate-bid-notification-in mb-4 relative overflow-hidden rounded-xl border-2 border-cyan/60 bg-gradient-to-r from-cyan/15 via-cyan/10 to-pink/15 px-4 py-3 shadow-lg"
+            style={{
+              boxShadow:
+                "0 0 20px oklch(0.78 0.18 195 / 0.35), 0 0 40px oklch(0.78 0.18 195 / 0.15)",
+            }}
+          >
+            {/* Shimmer overlay */}
+            <div
+              className="pointer-events-none absolute inset-0 opacity-20"
+              style={{
+                background:
+                  "linear-gradient(105deg, transparent 30%, oklch(0.78 0.18 195 / 0.4) 50%, transparent 70%)",
+                backgroundSize: "200% 100%",
+                animation: "shimmer 1.2s linear",
+              }}
+            />
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan/20 shrink-0 border border-cyan/40">
+                <Gavel className="h-4 w-4 text-cyan" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
+                    New Bid!
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-bold">
+                    <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+                    LIVE
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-foreground truncate">
+                  <span className="text-cyan">{bidNotification.teamName}</span>
+                  <span className="text-muted-foreground font-normal">
+                    {" "}
+                    bid{" "}
+                  </span>
+                  <span className="text-pink font-extrabold">
+                    {formatCurrency(BigInt(Math.round(bidNotification.amount)))}
+                  </span>
+                  {bidNotification.playerName && (
+                    <span className="text-muted-foreground font-normal">
+                      {" "}
+                      for{" "}
+                      <span className="text-foreground">
+                        {bidNotification.playerName}
+                      </span>
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Live Feed */}
@@ -409,23 +527,37 @@ export default function TeamDashboard() {
                       </div>
                       <BidHighlight
                         trigger={BigInt(Math.round(currentBid))}
-                        className="bg-secondary rounded-lg p-3"
+                        className={`rounded-lg p-3 transition-all duration-300 ${isNewBid ? "bg-cyan/15 border border-cyan/40" : "bg-secondary"}`}
                       >
                         <p className="text-xs text-muted-foreground">
                           Current Bid
                         </p>
-                        <p className="text-sm font-bold text-pink">
+                        <p
+                          className={`text-sm font-bold text-pink ${isNewBid ? "animate-bid-amount-pop" : ""}`}
+                        >
                           {formatCurrency(BigInt(Math.round(currentBid)))}
                         </p>
                       </BidHighlight>
                     </div>
 
                     {leadingTeam && (
-                      <div className="flex items-center gap-2 p-2 bg-cyan/10 rounded-lg border border-cyan/20">
-                        <TrendingUp className="w-4 h-4 text-cyan" />
-                        <span className="text-sm text-cyan font-medium">
-                          Leading: {leadingTeam}
-                        </span>
+                      <div
+                        className={`flex items-center gap-2 p-2.5 rounded-lg border transition-all duration-300 ${isNewBid ? "animate-leading-team-flash" : "bg-cyan/10 border-cyan/20"}`}
+                      >
+                        <TrendingUp className="w-4 h-4 text-cyan shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs text-muted-foreground block">
+                            Leading Team
+                          </span>
+                          <span className="text-sm text-cyan font-bold truncate block">
+                            🏏 {leadingTeam}
+                          </span>
+                        </div>
+                        {isNewBid && (
+                          <span className="text-xs font-bold text-cyan bg-cyan/20 px-2 py-0.5 rounded-full border border-cyan/40 shrink-0 animate-pulse">
+                            +1 BID
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -483,32 +615,66 @@ export default function TeamDashboard() {
             {/* Bid History */}
             {bidHistory.length > 0 && (
               <div className="card-navy rounded-xl p-4 border border-border">
-                <h3 className="text-sm font-semibold text-foreground mb-3">
-                  Bid History
-                </h3>
-                <ScrollArea className="h-48">
-                  <div className="space-y-2">
-                    {bidHistory.map((bid, i) => (
-                      <div
-                        key={bid.id}
-                        data-ocid={`bid_history.item.${i + 1}`}
-                        className={`flex items-center justify-between p-2.5 rounded-lg ${i === 0 ? "bg-cyan/10 border border-cyan/20" : "bg-secondary"}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {i === 0 && (
-                            <TrendingUp className="w-3.5 h-3.5 text-cyan" />
-                          )}
-                          <span className="text-sm font-medium text-foreground">
-                            {bid.teamName}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span
+                      className="inline-block w-2 h-2 rounded-full bg-red-400 animate-pulse"
+                      aria-hidden="true"
+                    />
+                    Live Bid Feed
+                  </h3>
+                  <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                    {bidHistory.length} bids
+                  </span>
+                </div>
+                <ScrollArea className="h-56">
+                  <div className="space-y-1.5">
+                    {bidHistory.map((bid, i) => {
+                      const isAnimating = animatedBidIds.has(bid.id);
+                      const isLatest = i === 0;
+                      const time = new Date(bid.timestamp).toLocaleTimeString(
+                        "en-IN",
+                        { timeStyle: "short" },
+                      );
+                      return (
+                        <div
+                          key={bid.id}
+                          data-ocid={`bid_history.item.${i + 1}`}
+                          className={`flex items-center justify-between p-2.5 rounded-lg border transition-all duration-300 ${
+                            isLatest
+                              ? "bg-cyan/10 border-cyan/30"
+                              : "bg-secondary/60 border-transparent"
+                          } ${isAnimating ? "animate-bid-entry" : ""}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isLatest ? (
+                              <div className="w-5 h-5 rounded-full bg-cyan/20 border border-cyan/40 flex items-center justify-center shrink-0">
+                                <Gavel className="w-2.5 h-2.5 text-cyan" />
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <span
+                                className={`text-sm font-semibold truncate block ${isLatest ? "text-cyan" : "text-foreground"}`}
+                              >
+                                {bid.teamName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {time}
+                              </span>
+                            </div>
+                          </div>
+                          <span
+                            className={`text-sm font-bold shrink-0 ml-2 ${isLatest ? "text-pink" : "text-muted-foreground"}`}
+                          >
+                            {formatCurrency(BigInt(Math.round(bid.amount)))}
                           </span>
                         </div>
-                        <span
-                          className={`text-sm font-bold ${i === 0 ? "text-cyan" : "text-muted-foreground"}`}
-                        >
-                          {formatCurrency(BigInt(Math.round(bid.amount)))}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               </div>
@@ -656,6 +822,13 @@ export default function TeamDashboard() {
                 </ScrollArea>
               </div>
             )}
+
+            {/* Basic Analytics (visible to all teams) */}
+            <AuctionAnalyticsPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              variant="basic"
+            />
           </div>
         </div>
       </main>

@@ -67,7 +67,7 @@ export default function AdminLogin() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <img
-            src="/assets/uploads/Cricket-auction-logo-for-Thanjavur-event-1.png"
+            src="/assets/uploads/Cricket_auction_logo_for_Thanjavur_event-removebg-preview-1.png"
             alt="IPL Auction — Bid Build Battle"
             className="w-44 sm:w-52 h-auto object-contain mb-4 animate-splash-in"
             style={{

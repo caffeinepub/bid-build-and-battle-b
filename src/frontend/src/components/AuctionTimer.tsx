@@ -22,13 +22,13 @@ export default function AuctionTimer({
 
   // Color based on time remaining
   const getColor = () => {
-    if (timeLeft > 20)
+    if (timeLeft > 10)
       return {
         stroke: "oklch(0.75 0.18 145)",
         text: "text-green-400",
         ring: "#4ade80",
       };
-    if (timeLeft > 10)
+    if (timeLeft > 5)
       return {
         stroke: "oklch(0.80 0.18 80)",
         text: "text-yellow-400",
@@ -42,7 +42,7 @@ export default function AuctionTimer({
   };
 
   const color = getColor();
-  const isUrgent = timeLeft <= 10 && timeLeft > 0;
+  const isUrgent = timeLeft <= 5 && timeLeft > 0;
 
   const dims = {
     sm: {
@@ -116,12 +116,14 @@ export default function AuctionTimer({
         </span>
       </div>
 
-      {/* Glow effect when urgent */}
+      {/* Glow effect when urgent (last 5 seconds) */}
       {isUrgent && (
         <div
-          className="absolute inset-0 rounded-full opacity-30"
+          className="absolute inset-0 rounded-full"
           style={{
-            boxShadow: `0 0 20px ${color.ring}, 0 0 40px ${color.ring}`,
+            boxShadow: `0 0 24px ${color.ring}, 0 0 48px ${color.ring}, 0 0 72px ${color.ring}`,
+            opacity: timeLeft <= 3 ? 0.6 : 0.4,
+            animation: "timer-pulse 0.5s ease-in-out infinite",
           }}
           aria-hidden="true"
         />
