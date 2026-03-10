@@ -21,6 +21,8 @@ const TeamRegister = lazy(() => import("./pages/TeamRegister"));
 const TeamDashboard = lazy(() => import("./pages/TeamDashboard"));
 const WatchPage = lazy(() => import("./pages/WatchPage"));
 const ResultsPage = lazy(() => import("./pages/ResultsPage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const SquadPage = lazy(() => import("./pages/SquadPage"));
 
 function RootLayout() {
   return (
@@ -111,6 +113,18 @@ const teamDashboardRoute = createRoute({
   ),
 });
 
+const leaderboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/leaderboard",
+  component: () => <LeaderboardPage />,
+});
+
+const squadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/squad/$teamId",
+  component: () => <SquadPage />,
+});
+
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "*",
@@ -130,6 +144,8 @@ const routeTree = rootRoute.addChildren([
   teamLoginRoute,
   teamRegisterRoute,
   teamDashboardRoute,
+  leaderboardRoute,
+  squadRoute,
   catchAllRoute,
 ]);
 

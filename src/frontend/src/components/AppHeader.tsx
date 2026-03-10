@@ -8,7 +8,10 @@ import {
   LogOut,
   Menu,
   Shield,
+  Trophy,
   Users,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import type React from "react";
@@ -19,6 +22,7 @@ import {
   clearAdminSession,
   getAdminSession,
 } from "../lib/authConstants";
+import { isSoundEnabled, setSoundEnabled } from "../lib/soundEngine";
 import B3Logo from "./B3Logo";
 
 export default function AppHeader() {
@@ -35,6 +39,17 @@ export default function AppHeader() {
   const [isAdminSession, setIsAdminSession] = useState<boolean>(() =>
     getAdminSession(),
   );
+
+  // Sound toggle state
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() =>
+    isSoundEnabled(),
+  );
+
+  const handleSoundToggle = () => {
+    const newVal = !soundEnabled;
+    setSoundEnabled(newVal);
+    setSoundEnabledState(newVal);
+  };
 
   useEffect(() => {
     const handleSessionChange = () => {
@@ -74,6 +89,7 @@ export default function AppHeader() {
     icon: React.ElementType;
   }> = [
     { to: "/watch", label: "Live Auction", icon: Eye },
+    { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
     { to: "/results", label: "Results", icon: BarChart3 },
   ];
 
@@ -127,6 +143,23 @@ export default function AppHeader() {
 
           {/* Auth Button */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Sound Toggle */}
+            <button
+              type="button"
+              data-ocid="header.sound.toggle"
+              onClick={handleSoundToggle}
+              title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4" />
+              ) : (
+                <VolumeX className="w-4 h-4" />
+              )}
+              <span className="hidden lg:inline">
+                {soundEnabled ? "Sound On" : "Sound Off"}
+              </span>
+            </button>
             {isAdminSession ? (
               <Button
                 variant="ghost"
@@ -208,6 +241,20 @@ export default function AppHeader() {
               </button>
             ))}
             <div className="pt-2 border-t border-border">
+              {/* Sound Toggle mobile */}
+              <button
+                type="button"
+                data-ocid="header.sound_mobile.toggle"
+                onClick={handleSoundToggle}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary w-full transition-all"
+              >
+                {soundEnabled ? (
+                  <Volume2 className="w-4 h-4" />
+                ) : (
+                  <VolumeX className="w-4 h-4" />
+                )}
+                {soundEnabled ? "🔊 Sound On" : "🔇 Sound Off"}
+              </button>
               {isAdminSession ? (
                 <button
                   type="button"

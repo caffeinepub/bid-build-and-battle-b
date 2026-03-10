@@ -7,8 +7,10 @@ import AppHeader from "../components/AppHeader";
 import AuctionAnalyticsPanel from "../components/AuctionAnalyticsPanel";
 import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
 import BidHighlight from "../components/BidHighlight";
+import LeaderboardMiniPanel from "../components/LeaderboardMiniPanel";
 import SkeletonLoader from "../components/SkeletonLoader";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
+import { useSoundEffects } from "../hooks/useSoundEffects";
 import type { LocalPlayer } from "../lib/auctionStore";
 import {
   formatCurrency,
@@ -51,6 +53,9 @@ export default function WatchPage() {
     isLoading,
     allPlayers,
   } = useAuctionEngine();
+
+  // Sound effects for spectators
+  useSoundEffects(engine);
 
   const currentBid = engine?.currentBid ?? 0;
   const leadingTeam = engine?.highestBidTeamName ?? "";
@@ -102,6 +107,8 @@ export default function WatchPage() {
         isLive={isLive}
         hasPlayer={!!engine?.currentPlayerId}
         highestBidder={engine?.highestBidTeamName ?? null}
+        playerName={currentPlayerData?.name ?? null}
+        finalPrice={engine?.currentBid ?? null}
       />
 
       <AppHeader />
@@ -380,6 +387,13 @@ export default function WatchPage() {
 
           {/* Right: Analytics + Teams */}
           <div className="space-y-4">
+            {/* Leaderboard Mini Panel */}
+            <LeaderboardMiniPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              showLink
+            />
+
             {/* Basic Analytics for spectators */}
             <AuctionAnalyticsPanel
               engine={engine}

@@ -50,9 +50,11 @@ import AuctionAnalyticsPanel from "../components/AuctionAnalyticsPanel";
 import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
 import AuctionTimer from "../components/AuctionTimer";
 import B3Logo from "../components/B3Logo";
+import LeaderboardMiniPanel from "../components/LeaderboardMiniPanel";
 import Modal from "../components/Modal";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
 import { useBidNotification } from "../hooks/useBidNotification";
+import { useSoundEffects } from "../hooks/useSoundEffects";
 import type { BidRecord, LocalPlayer } from "../lib/auctionStore";
 import {
   getAuctionRooms,
@@ -1021,6 +1023,9 @@ export default function AuctionRoom() {
   // Real-time bid notification for admin view
   const { isNewBid } = useBidNotification(engine);
 
+  // Sound effects
+  useSoundEffects(engine);
+
   const rooms = getAuctionRooms();
   const auctionName = rooms[0]?.auctionName ?? "B³ Auction";
   const roomKey = rooms[0]?.roomKey ?? "—";
@@ -1337,6 +1342,8 @@ export default function AuctionRoom() {
         isLive={isLive}
         hasPlayer={!!engine?.currentPlayerId}
         highestBidder={engine?.highestBidTeamName ?? null}
+        playerName={currentPlayerData?.name ?? null}
+        finalPrice={engine?.currentBid ?? null}
       />
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -1565,6 +1572,13 @@ export default function AuctionRoom() {
               engine={engine}
               allPlayers={allPlayers}
               variant="admin"
+            />
+
+            {/* Leaderboard Mini Panel */}
+            <LeaderboardMiniPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              showLink
             />
           </section>
         </div>

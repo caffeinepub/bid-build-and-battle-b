@@ -5,12 +5,15 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
+import { formatCurrency } from "../utils/currencyFormatter";
 
 interface AuctionDramaOverlayProps {
   timerSeconds: number;
   isLive: boolean;
   hasPlayer: boolean;
   highestBidder: string | null;
+  playerName?: string | null;
+  finalPrice?: number | null;
 }
 
 export default function AuctionDramaOverlay({
@@ -18,6 +21,8 @@ export default function AuctionDramaOverlay({
   isLive,
   hasPlayer,
   highestBidder,
+  playerName,
+  finalPrice,
 }: AuctionDramaOverlayProps) {
   // Track whether the sold/unsold flash is still visible
   const [soldVisible, setSoldVisible] = useState(false);
@@ -46,7 +51,7 @@ export default function AuctionDramaOverlay({
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
       hideTimerRef.current = setTimeout(() => {
         setSoldVisible(false);
-      }, 2000);
+      }, 3000);
     }
   }, [timerSeconds, isLive, hasPlayer, highestBidder]);
 
@@ -131,6 +136,24 @@ export default function AuctionDramaOverlay({
                 🏏 {highestBidder}
               </p>
             )}
+            {playerName && (
+              <p
+                className="text-lg font-semibold mt-1"
+                style={{ color: "oklch(0.82 0.18 85)" }}
+              >
+                🏏 {playerName}
+              </p>
+            )}
+            {finalPrice !== null &&
+              finalPrice !== undefined &&
+              finalPrice > 0 && (
+                <p
+                  className="text-2xl font-black mt-1"
+                  style={{ color: "oklch(0.68 0.22 0)" }}
+                >
+                  {formatCurrency(BigInt(Math.round(finalPrice)))}
+                </p>
+              )}
           </div>
         </div>
       );

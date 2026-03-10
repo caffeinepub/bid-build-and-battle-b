@@ -1,86 +1,76 @@
-# Bid Build and Battle (B³) — Phase 4
+# Bid Build and Battle (B³) — Phase 5
 
 ## Current State
 
-The app is a full-stack IPL-style auction platform with:
-- Admin login (passcode `sastra2026`)
-- Room creation + team management (backend-synced via Motoko canister)
-- Team passkey login from any device
-- Admin approval flow
-- Player management (add/edit/delete)
-- Live auction engine: 3-column admin control panel, team dashboard with real-time bid feed
-- Cross-device sync via 1-second polling + BroadcastChannel
-- `timerDuration` stored in engine (default 60s), configurable at init
-- `getTimerSecondsRemaining()` derives seconds from `lastBidTimestamp`
-- Auto-resolution: `triggerResolutionIfExpired` called from AuctionRoom when `timerSeconds === 0`
-- Bid notifications + animations already in place
-
-**Current timer behavior:** A single `timerDuration` is used for both the initial player timer and the reset-on-bid timer. Default is 60s. Timer init form allows a custom value.
-
-**No analytics panel exists anywhere.** No "Going Once / Going Twice / SOLD!" drama animation exists. No configurable initial-vs-reset timer split exists. No crash recovery loading screen exists.
+The app is a full-stack IPL auction simulator on ICP (Motoko + React). It has:
+- Admin login (passcode `sastra2026`), auction room, player management
+- Team passkey login, cross-device backend sync via Motoko canister
+- Live bidding engine with 60s timer, dual timer (initial + bid-reset), race condition protection
+- Real-time bid notifications on all devices (polls every 2s)
+- Phase 4: configurable dual timers, "Going Once/Twice/SOLD!" drama overlay, crash recovery, analytics panel (admin full / teams basic)
+- Routes: `/`, `/admin/login`, `/admin/dashboard`, `/admin/auction-room`, `/team/login`, `/team/dashboard`, `/watch`, `/results`
+- Components: AuctionAnalyticsPanel, AuctionDramaOverlay, AuctionTimer, B3Logo, BidButton, BidHighlight, AppHeader, TeamPanel, etc.
+- Data: `auctionStore.ts` (localStorage + backend sync), `backendSync.ts`, `useAuctionEngine` hook
 
 ## Requested Changes (Diff)
 
 ### Add
 
-1. **Configurable timer** — Add two separate timer fields to `AuctionEngine` and the init form:
-   - `initialTimerDuration` (default 15s): timer duration when a player first becomes active
-   - `bidTimerDuration` (default 10s): timer duration after each bid
-   - Timer setup UI in `InitializeAuctionForm`: clickable preset buttons `[10s] [15s] [20s] [30s] [60s]` for each field
-   - `getTimerSecondsRemaining` updated to use `bidTimerDuration` for post-bid resets and `initialTimerDuration` for player activation
+1. **Live Leaderboard small panel** — inside AuctionRoom (right column) and TeamDashboard (right column sidebar), showing top 5 teams ranked by `totalSpent` (money spent). Columns: rank, team name, players bought, total spent. Gold/silver/bronze highlight for top 3. Updates from engine state every 2s poll.
 
-2. **"Going Once / Going Twice / SOLD!" drama overlay** — An animated overlay that triggers based on remaining seconds:
-   - 5s left → "Going Once!" (yellow/amber)
-   - 3s left → "Going Twice!" (orange)
-   - 0s → "SOLD!" or "UNSOLD" (green/red) for 2 seconds
-   - Shown in both AuctionRoom (admin) and TeamDashboard (teams)
+2. **Dedicated `/leaderboard` page** — full leaderboard table visible to everyone (no login required). Columns: Rank | Team | Players | Total Spend | Budget Left | Avg Player Price. Sort by most spend. Top 3 teams highlighted with gold/silver/bronze. Accessible from AppHeader nav and from TeamDashboard.
 
-3. **Last 5 seconds countdown highlight** — Timer ring/text pulses red + blinks when ≤ 5 seconds remain (already partially exists, enhance to match 5s threshold)
+3. **Team Squad pages** — route `/squad/:teamId`. Shows full squad for any team, visible to everyone (no login required). Displays: team name, player list (name, role, category, price paid), plus summary stats (total players, total spent, remaining budget, avg price). Back button. Accessible from Leaderboard page (click team name) and TeamDashboard (view squad link).
 
-4. **Crash recovery loading screen** — On page load (AuctionRoom + TeamDashboard), show a full-screen loading overlay ("Restoring auction state...") while the initial backend fetch resolves, then fade out. Uses the existing `isLoading` concept but adds a proper timed screen.
+4. **Sound effects** — on by default, per-device mute toggle stored in `localStorage`. Four sounds generated as short Web Audio API tones (no external files needed):
+   - Bid placed → short soft click (400Hz, 80ms)
+   - New highest bid → stadium chime (C5 → E5 → G5 chord, 300ms)
+   - Timer last 5 seconds → countdown beep (600Hz, 150ms each second)
+   - Player sold → gavel strike (low thud + decay, 500ms)
+   Sounds play on all pages where auctions are active (TeamDashboard, WatchPage, AuctionRoom).
+   Sound toggle button in AppHeader: 🔊/🔇 icon, stored in `b3_sound_enabled` localStorage key.
 
-5. **Auction Analytics Panel** — New `AuctionAnalyticsPanel` component shown:
-   - **Admin** (in AuctionRoom right column, below bid history): full analytics
-     - Most Expensive Player (name + team + price)
-     - Total Auction Spend (sum of all results)
-     - Average Player Price
-     - Unsold Players count
-     - Remaining Players count
-     - Team Spending breakdown (sorted by spend, with budget bar)
-   - **Teams + Spectators** (in TeamDashboard sidebar + WatchPage): basic analytics
-     - Most Expensive Player
-     - Total Auction Spend
-     - Average Player Price
+5. **"SOLD!" full-screen animation** — when a player is sold, show a large overlay: "SOLD!", player name, winning team, final price. This already has `AuctionDramaOverlay` — extend it to show the sold overlay with player name + team + price when timer hits 0 and there's a highest bidder. Show for 3 seconds.
+
+6. **CSV export** on ResultsPage — "Download Results CSV" button. Columns: Player, Team, Price (in rupees), Role, Category.
 
 ### Modify
 
-- `AuctionEngine` type: add `initialTimerDuration` and `bidTimerDuration` fields (keep `timerDuration` as alias/fallback for backward compatibility)
-- `getDefaultAuctionEngine()`: set `initialTimerDuration: 15`, `bidTimerDuration: 10`, `timerDuration: 15`
-- `initAuctionEngine()`: accept `initialTimerDuration` and `bidTimerDuration` params
-- `activateNextPlayer()`: sets `lastBidTimestamp` (timer uses `initialTimerDuration` from engine)
-- `placeBidInEngine()`: after bid, timer uses `bidTimerDuration` (already resets `lastBidTimestamp`, engine fields drive the calculation)
-- `getTimerSecondsRemaining()`: use `bidTimerDuration` if `highestBidTeamId` is set (bid has been placed), else use `initialTimerDuration`
-- `InitializeAuctionForm`: replace single timer input with two preset-button rows
-- `useAuctionEngine.initAuction()`: pass both timer values
-- `AuctionTimer` component: add red pulse when ≤ 5s
-- `AuctionRoom` center column: add drama overlay
-- `TeamDashboard`: add drama overlay + basic analytics panel in sidebar
-- `WatchPage`: add basic analytics panel
+- **AppHeader** — add `/leaderboard` nav link (Trophy icon) visible to everyone. Add sound toggle button (Volume2/VolumeX icon) that reads/writes `b3_sound_enabled` in localStorage.
+- **AuctionRoom right column** — add LeaderboardMiniPanel above or below BidHistoryPanel.
+- **TeamDashboard right sidebar** — add a small leaderboard mini-panel and a "View Full Leaderboard" link.
+- **WatchPage** — add leaderboard mini-panel in the right column.
+- **AuctionDramaOverlay** — extend SOLD drama to display player name, winning team, final price for 3s.
+- **ResultsPage** — add CSV export button.
 
 ### Remove
 
-- Nothing removed; `timerDuration` kept as backward-compat alias
+Nothing removed.
 
 ## Implementation Plan
 
-1. Update `AuctionEngine` type + defaults + store functions in `auctionStore.ts`
-2. Update `getTimerSecondsRemaining` to branch on whether a bid has been placed
-3. Update `useAuctionEngine` hook: pass both timer durations through `initAuction`
-4. Update `InitializeAuctionForm` in `AuctionRoom.tsx`: two preset-button rows for initial/bid timer
-5. Create `AuctionDramaOverlay` component: "Going Once / Going Twice / SOLD!" animation
-6. Enhance `AuctionTimer` component: red pulse when ≤ 5s
-7. Create `AuctionAnalyticsPanel` component with admin-full and basic variants
-8. Add crash recovery loading screen to `AuctionRoom` and `TeamDashboard`
-9. Integrate drama overlay into `AuctionRoom` (center column) and `TeamDashboard`
-10. Add basic analytics to `TeamDashboard` sidebar and `WatchPage`
-11. Add full analytics to `AuctionRoom` right column (below bid history)
+1. Create `src/frontend/src/lib/soundEngine.ts` — Web Audio API sound generator with 4 sound functions + mute state reading from localStorage. Export `playBidSound()`, `playChimeSound()`, `playCountdownBeep()`, `playSoldSound()`, `isSoundEnabled()`, `setSoundEnabled()`.
+
+2. Create `src/frontend/src/hooks/useSoundEffects.ts` — hook that takes engine state and previous state, fires correct sounds when: new bid arrives, last 5s countdown ticks, player sold.
+
+3. Create `src/frontend/src/components/LeaderboardMiniPanel.tsx` — compact top-5 leaderboard panel from engine state. Gold/silver/bronze medals for top 3. Shows rank, team name, players, total spent.
+
+4. Create `src/frontend/src/pages/LeaderboardPage.tsx` — full leaderboard page at `/leaderboard`. Full table with all teams. Sort by total spend. Clickable team names → `/squad/:teamId`. "Back to Auction" link.
+
+5. Create `src/frontend/src/pages/SquadPage.tsx` — squad detail page at `/squad/:teamId`. Shows team summary + full player list with price. Accessible to everyone.
+
+6. Update `src/frontend/src/App.tsx` — add `/leaderboard` and `/squad/:teamId` routes.
+
+7. Update `src/frontend/src/components/AppHeader.tsx` — add Leaderboard nav link + sound toggle button.
+
+8. Update `src/frontend/src/pages/AuctionRoom.tsx` — add `LeaderboardMiniPanel` in right column.
+
+9. Update `src/frontend/src/pages/TeamDashboard.tsx` — add `LeaderboardMiniPanel` + "View Squad" and "Full Leaderboard" links in right sidebar. Wire `useSoundEffects`.
+
+10. Update `src/frontend/src/pages/WatchPage.tsx` — add `LeaderboardMiniPanel`. Wire `useSoundEffects`.
+
+11. Update `src/frontend/src/components/AuctionDramaOverlay.tsx` — when SOLD: show player name, team name, price for 3s.
+
+12. Update `src/frontend/src/pages/ResultsPage.tsx` — add CSV export button using browser `Blob` + `URL.createObjectURL`.
+
+13. Pass engine data (results, teams, allPlayers) to leaderboard/squad components — all computed client-side from existing engine state.

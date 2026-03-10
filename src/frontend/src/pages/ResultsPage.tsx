@@ -55,7 +55,41 @@ function PlayerThumb({ player }: { player: LocalPlayer }) {
 }
 
 // ─── Export Helpers ───────────────────────────────────────────────────────────
+function exportAuctionResultsCSV() {
+  const engine = getAuctionEngine();
+  const allPlayers = getLocalPlayers();
+
+  if (!engine || engine.results.length === 0) {
+    toast.error("No auction results to export");
+    return false;
+  }
+
+  const rows = ["Player,Team,Price (₹),Role,Category"];
+  for (const result of engine.results) {
+    const player = allPlayers.find((p) => p.id === result.playerId);
+    const role = player ? getRoleLabel(player.role) : "Unknown";
+    const category = player ? getCategoryLabel(player.category) : "Unknown";
+    rows.push(
+      `"${result.playerName}","${result.soldToTeamName}",${result.amount},"${role}","${category}"`,
+    );
+  }
+
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "b3-auction-results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success("CSV exported!");
+  return true;
+}
+
 function exportToCSV(teams: Team[], players: LocalPlayer[]) {
+  // Try auction results first; fall back to basic player pool export
+  const exported = exportAuctionResultsCSV();
+  if (exported) return;
+
   const rows: string[] = [
     "Team Name,Owner,Player Name,Role,Category,Base Price",
   ];
@@ -548,7 +582,16 @@ export default function ResultsPage() {
               Live auction data — updates in real time.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              data-ocid="results.download_button"
+              size="sm"
+              onClick={() => exportAuctionResultsCSV()}
+              className="gap-2 gradient-cyan-pink text-white font-bold hover:opacity-90"
+            >
+              <Download className="w-4 h-4" />
+              Download Auction Results (CSV)
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -21,9 +21,11 @@ import AuctionDramaOverlay from "../components/AuctionDramaOverlay";
 import B3Logo from "../components/B3Logo";
 import BidHighlight from "../components/BidHighlight";
 import ConfirmModal from "../components/ConfirmModal";
+import LeaderboardMiniPanel from "../components/LeaderboardMiniPanel";
 import SkeletonLoader from "../components/SkeletonLoader";
 import { useAuctionEngine } from "../hooks/useAuctionEngine";
 import { useBidNotification } from "../hooks/useBidNotification";
+import { useSoundEffects } from "../hooks/useSoundEffects";
 import {
   clearTeamSession,
   getAuctionEngine,
@@ -69,6 +71,9 @@ export default function TeamDashboard() {
   // Real-time bid notification
   const { notification: bidNotification, isNewBid } =
     useBidNotification(engine);
+
+  // Sound effects
+  useSoundEffects(engine);
 
   // Track new bid history entries for entrance animation
   const [animatedBidIds, setAnimatedBidIds] = useState<Set<string>>(new Set());
@@ -336,6 +341,8 @@ export default function TeamDashboard() {
         isLive={isLive}
         hasPlayer={!!engine?.currentPlayerId}
         highestBidder={engine?.highestBidTeamName ?? null}
+        playerName={currentPlayerData?.name ?? null}
+        finalPrice={engine?.currentBid ?? null}
       />
 
       <AppHeader />
@@ -731,10 +738,27 @@ export default function TeamDashboard() {
 
             {/* My Squad */}
             <div className="card-navy rounded-xl p-5 border border-border">
-              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Users className="w-4 h-4 text-pink" /> My Squad (
-                {mySquadPlayers.length})
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Users className="w-4 h-4 text-pink" /> My Squad (
+                  {mySquadPlayers.length})
+                </h3>
+                {session?.teamId && (
+                  <button
+                    type="button"
+                    data-ocid="team_squad.link"
+                    onClick={() =>
+                      void navigate({
+                        to: "/squad/$teamId",
+                        params: { teamId: session.teamId },
+                      })
+                    }
+                    className="text-xs text-cyan hover:text-cyan/80 transition-colors font-medium"
+                  >
+                    View Full Squad →
+                  </button>
+                )}
+              </div>
               {mySquadPlayers.length === 0 ? (
                 <div
                   data-ocid="team_squad.empty_state"
@@ -828,6 +852,13 @@ export default function TeamDashboard() {
               engine={engine}
               allPlayers={allPlayers}
               variant="basic"
+            />
+
+            {/* Leaderboard Mini Panel */}
+            <LeaderboardMiniPanel
+              engine={engine}
+              allPlayers={allPlayers}
+              showLink
             />
           </div>
         </div>
